@@ -182,7 +182,6 @@ if all(
     c in df_vc.columns
     for c in [vc_src_col, vc_dest_col, vc_inv_col, vc_year_col]
 ):
-    # Aggregate automatically across all data without manual filters
     sankey_data = (
         df_vc.groupby([vc_src_col, vc_dest_col], as_index=False)[vc_inv_col]
         .sum()
@@ -257,7 +256,7 @@ colors = []
 for _, row in bar_df.iterrows():
     c = row[gov_region_col]
     if c in focus_countries:
-        colors.append("gold")  # Uniform highlight color for USA, Germany, Korea
+        colors.append("gold")
     else:
         colors.append("mediumseagreen" if row["Divergence"] >= 0 else "coral")
 
@@ -275,8 +274,8 @@ bar_fig.add_trace(
 bar_fig.update_layout(
     title=f"Regulatory Governance Divergence from OECD Average ({oecd_avg_val:.2f}) - {int(latest_yr)}",
     xaxis_title="Divergence from OECD Average Score",
-    yaxis=dict(title="Country", tickfont=dict(size=9)),  # Reduced font to fit all countries
-    height=900,  Expanded height for full visibility
+    yaxis=dict(title="Country", tickfont=dict(size=9)),
+    height=900,  # Expanded height for full visibility
     shapes=[
         dict(
             type="line",
@@ -407,13 +406,13 @@ with col_hm1:
     )
 
     if not piv_vc.empty:
-        piv_vc = piv_vc.round(2)  # Round to 2 decimal places
+        piv_vc = piv_vc.round(2)
         fig_hm1 = px.imshow(
             piv_vc,
             labels=dict(x="Country", y="Year", color="YoY % Change (%)"),
             title="VC Flow YoY % Change (Years on Y, Countries on X)",
             color_continuous_scale="RdBu",
-            text_auto=True,  # Display rounded percentages inside cells
+            text_auto=True,
             aspect="auto",
         )
         st.plotly_chart(fig_hm1, use_container_width=True)
