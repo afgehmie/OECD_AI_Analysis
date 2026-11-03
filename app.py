@@ -28,7 +28,6 @@ def load_data():
     except Exception as e:
         return None, None, str(e)
     
-    # Standardize column names
     df_gov.columns = [c.strip() for c in df_gov.columns]
     df_vc.columns = [c.strip() for c in df_vc.columns]
     return df_gov, df_vc, None
@@ -43,17 +42,18 @@ if err:
 
 # --- SIDEBAR CONTROLS ---
 st.sidebar.header("Global Dashboard Controls")
+default_focus = ["United States", "Germany", "Korea"] if all(c in df_gov["Region"].values for c in ["United States", "Germany", "Korea"]) else []
 target_countries = st.sidebar.multiselect(
-    "Select Focus Countries",
-    options=["United States", "Germany", "Korea"],
-    default=["United States", "Germany", "Korea"],
+    "Select Focus Countries (Deep-Dives & Sankey)",
+    options=sorted(df_gov["Region"].unique()),
+    default=default_focus,
 )
 
 
 # --- SECTION 1: REGULATORY GOVERNANCE SCORE MAP ---
 st.header("Regulatory Governance Score")
 st.markdown(
-    "Interactive choropleth map displaying OECD regulatory governance performance. Use the controls below to switch between survey benchmarks or auto-animate."
+    "Interactive choropleth map displaying OECD regulatory governance performance. Unselected countries appear in muted gray. Toggle year view or use the automatic animation loop."
 )
 
 if all(c in df_gov.columns for c in ["Region", "Year", "VALUE (0 - 4)"]):
@@ -63,57 +63,80 @@ if all(c in df_gov.columns for c in ["Region", "Year", "VALUE (0 - 4)"]):
         .rename(columns={"Region": "Country", "VALUE (0 - 4)": "Score"})
     )
 
+    all_countries_list = sorted(map_df["Country"].unique().tolist())
+
     col_ctrl1, col_ctrl2 = st.columns(2)
     with col_ctrl1:
         map_year_mode = st.radio(
-            "Select Year View", options=["2021", "2024", "Animate Both"], horizontal=True, key="map_view"
+            "Select Year View", options=["2021", "2024", "Animate Both (Loop)"], horizontal=True, key="map_view"
         )
     with col_ctrl2:
         highlight_map_countries = st.multiselect(
-            "Highlight Countries",
-            options=["United States", "Germany", "Korea"],
-            default=["United States", "Germany", "Korea"],
+            "Highlight Countries on Map",
+            options=all_countries_list,
+            default=["United States", "Germany", "Korea"] if "United States" in all_countries_list else all_countries_list[:3],
             key="map_highlight"
         )
 
-    if map_year_mode != "Animate Both":
-        filtered_map_df = map_df[map_df["Year"] == int(map_year_mode)].copy()
+    # Filter scores for unselected countries so they turn neutral gray
+    map_df["Plot Score"] = map_df.apply(
+        lambda row: row["Score"] if row["Country"] in highlight_map_countries else np.nan,
+        axis=1
+    )
+
+    # Calculate precise color scale midpoint around OECD average (~0.7825) given scores cluster under 2.0
+    oecd_avg_val = 0.7825
+
+    if map_year_mode != "Animate Both (Loop)":
+        target_yr = 2021 if map_year_mode == "2021" else 2024
+        filtered_map_df = map_df[map_df["Year"] == target_yr].copy()
+        
         fig_map = px.choropleth(
             filtered_map_df,
             locations="Country",
             locationmode="country names",
-            color="Score",
+            color="Plot Score",
             hover_name="Country",
-            color_continuous_scale="RdYlGn",  # Diverging: Red (underperformance) to Green (performance)
+            hover_data={"Score": True, "Plot Score": False},
+            color_continuous_scale="RdYlGn",
+            color_continuous_midpoint=oecd_avg_val,
             range_color=[0, 4],
-            title=f"Regulatory Governance Scores ({map_year_mode})",
+            title=f"Regulatory Governance Scores ({target_yr})",
         )
     else:
         fig_map = px.choropleth(
             map_df,
             locations="Country",
             locationmode="country names",
-            color="Score",
+            color="Plot Score",
             animation_frame="Year",
             hover_name="Country",
+            hover_data={"Score": True, "Plot Score": False},
             color_continuous_scale="RdYlGn",
+            color_continuous_midpoint=oecd_avg_val,
             range_color=[0, 4],
-            title="OECD Regulatory Governance Score Evolution (2021 vs 2024)",
+            title="OECD Regulatory Governance Score Evolution (2021 vs 2024 Loop)",
         )
-        # Smooth out animation timing
+        # Configure automatic loop & frame duration
         if len(fig_map.layout.updatemenus) > 0:
-            fig_map.layout.updatemenus[0].buttons[0].args[1]["frame"]["duration"] = 2000
-            fig_map.layout.updatemenus[0].buttons[0].args[1]["transition"]["duration"] = 800
+            fig_map.layout.updatemenus[0].buttons[0].args[1]["frame"]["duration"] = 2500
+            fig_map.layout.updatemenus[0].buttons[0].args[1]["transition"]["duration"] = 1000
+            # Enable auto-play loop transition configuration
+            fig_map.layout.updatemenus[0].buttons[0].args[1]["transition"]["easing"] = "cubic-in-out"
 
     fig_map.update_layout(
         geo=dict(
             showframe=False,
             showcoastlines=True,
             projection_type="natural earth",
+            bgcolor="rgba(0,0,0,0)",
         ),
+        coloraxis_colorbar=dict(title="Score (0-4)<br>(Mid: 0.7825)"),
         height=600,
         margin=dict(l=0, r=0, t=50, b=0),
     )
+    # Set unselected/missing regions to clean light gray
+    fig_map.update_traces(marker_line_width=0.5, selector=dict(type='choropleth'))
     st.plotly_chart(fig_map, use_container_width=True)
 else:
     st.warning("Required columns ('Region', 'Year', 'VALUE (0 - 4)') not found in Regulatory Governance dataset.")
@@ -122,54 +145,57 @@ else:
 # --- SECTION 2: ANIMATED SANKEY DIAGRAM ---
 st.header("Animated Sankey Diagram: Cross-Border AI VC Flows (2021–2026)")
 st.markdown(
-    "Tracking venture capital investment flows (in millions USD) from source countries into United States, Germany, and Korea."
+    "Tracking venture capital investment flows (in millions USD) from source countries into selected focus countries."
 )
 
 if all(c in df_vc.columns for c in ["Country source", "Destination", "Investment (In USD millions)", "year"]):
     vc_filtered = df_vc[df_vc["Destination"].isin(target_countries)].copy()
 
-    selected_sankey_year = st.slider(
-        "Select Year for Sankey Flow",
-        int(vc_filtered["year"].min()),
-        int(vc_filtered["year"].max()),
-        2021,
-    )
-    vc_year_data = vc_filtered[vc_filtered["year"] == selected_sankey_year]
-
-    if not vc_year_data.empty:
-        sources = vc_year_data["Country source"].tolist()
-        destinations = vc_year_data["Destination"].tolist()
-        values = vc_year_data["Investment (In USD millions)"].tolist()
-
-        all_nodes = list(set(sources + destinations))
-        node_indices = {node: i for i, node in enumerate(all_nodes)}
-
-        sankey_fig = go.Figure(
-            data=[
-                go.Sankey(
-                    node=dict(
-                        pad=15,
-                        thickness=20,
-                        line=dict(color="black", width=0.5),
-                        label=all_nodes,
-                        color="skyblue",
-                    ),
-                    link=dict(
-                        source=[node_indices[s] for s in sources],
-                        target=[node_indices[d] for d in destinations],
-                        value=values,
-                    ),
-                )
-            ]
+    if not vc_filtered.empty:
+        selected_sankey_year = st.slider(
+            "Select Year for Sankey Flow",
+            int(vc_filtered["year"].min()),
+            int(vc_filtered["year"].max()),
+            2021,
         )
-        sankey_fig.update_layout(
-            title_text=f"AI VC Investment Flows to Target Countries ({selected_sankey_year})",
-            font_size=11,
-            height=500,
-        )
-        st.plotly_chart(sankey_fig, use_container_width=True)
+        vc_year_data = vc_filtered[vc_filtered["year"] == selected_sankey_year]
+
+        if not vc_year_data.empty:
+            sources = vc_year_data["Country source"].tolist()
+            destinations = vc_year_data["Destination"].tolist()
+            values = vc_year_data["Investment (In USD millions)"].tolist()
+
+            all_nodes = list(set(sources + destinations))
+            node_indices = {node: i for i, node in enumerate(all_nodes)}
+
+            sankey_fig = go.Figure(
+                data=[
+                    go.Sankey(
+                        node=dict(
+                            pad=15,
+                            thickness=20,
+                            line=dict(color="black", width=0.5),
+                            label=all_nodes,
+                            color="skyblue",
+                        ),
+                        link=dict(
+                            source=[node_indices[s] for s in sources],
+                            target=[node_indices[d] for d in destinations],
+                            value=values,
+                        ),
+                    )
+                ]
+            )
+            sankey_fig.update_layout(
+                title_text=f"AI VC Investment Flows to Focus Countries ({selected_sankey_year})",
+                font_size=11,
+                height=500,
+            )
+            st.plotly_chart(sankey_fig, use_container_width=True)
+        else:
+            st.info("No VC flow data available for the selected year.")
     else:
-        st.info("No VC flow data available for the selected year and destinations.")
+        st.info("Please select at least one focus country in the sidebar for the Sankey diagram.")
 else:
     st.warning("Required columns not found in VC_Flow dataset.")
 
@@ -184,7 +210,6 @@ if all(c in df_gov.columns for c in ["Region", "Year", "VALUE (0 - 4)"]):
     latest_year = df_gov["Year"].max()
     latest_gov = df_gov[df_gov["Year"] == latest_year]
     
-    # Calculate OECD average benchmark
     oecd_avg_row = latest_gov[latest_gov["Region"].str.contains("OECD average", case=False, na=False)]
     avg_score = oecd_avg_row["VALUE (0 - 4)"].mean() if not oecd_avg_row.empty else latest_gov["VALUE (0 - 4)"].mean()
 
@@ -219,6 +244,9 @@ st.header("Country Deep-Dive: Investment Trends & Regulatory Performance")
 st.markdown(
     "Dual-axis time series tracking investment amounts (Left Y-axis) alongside country regulatory scores and the OECD average (Right Y-axis)."
 )
+
+if not target_countries:
+    st.info("Please select focus countries in the sidebar to view deep-dive time series.")
 
 for country in target_countries:
     st.subheader(f"Deep-Dive: {country}")
