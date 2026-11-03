@@ -70,16 +70,6 @@ vc_year_col = next(
     (c for c in df_vc.columns if "year" in c.lower()), df_vc.columns[5]
 )
 
-# Robustly clean and convert investment column to numeric (handles strings/commas)
-if df_vc[vc_inv_col].dtype == object:
-    df_vc[vc_inv_col] = (
-        df_vc[vc_inv_col]
-        .astype(str)
-        .str.replace(",", "", regex=True)
-        .str.strip()
-    )
-df_vc[vc_inv_col] = pd.to_numeric(df_vc[vc_inv_col], errors="coerce")
-
 # Sidebar focus control
 st.sidebar.header("Global Dashboard Controls")
 focus_countries = ["United States", "Germany", "Korea"]
@@ -342,7 +332,7 @@ for country in selected_deepdive_countries:
     sub_col1, sub_col2 = st.columns(2)
 
     with sub_col1:
-        # Group and sum cleaned numeric investment data by year
+        # Explicitly aggregate column E (Investment) grouped by numeric year
         inv_ts = (
             df_vc[df_vc[vc_dest_col] == country]
             .groupby(vc_year_col, as_index=False)[vc_inv_col]
