@@ -175,7 +175,7 @@ if map_mode == "Animate Both (Loop)":
 # --- PLOT 2: CROSS-BORDER AI VENTURE CAPITAL FLOW (2021-2026) ---
 st.header("Cross-border AI Venture Capital Flow (2021-2026)")
 st.markdown(
-    "Interactive Sankey diagram tracking cross-border VC investments from source countries (left) to destination countries (right) with the year scale at the bottom."
+    "Interactive Sankey diagram tracking cross-border VC investments from source countries (left) to destination countries (right) with the year scale below."
 )
 
 if all(
@@ -201,26 +201,26 @@ if all(
         destinations = sankey_data[vc_dest_col].astype(str).tolist()
         values = sankey_data[vc_inv_col].tolist()
 
-        unique_sources = [f"{s} (Source)" for s in sorted(list(set(sources)))]
-        unique_dests = [f"{d} (Destination)" for d in sorted(list(set(destinations)))]
+        unique_sources = sorted(list(set(sources)))
+        unique_dests = sorted(list(set(destinations)))
         all_nodes = unique_sources + unique_dests
 
         src_indices = {s: i for i, s in enumerate(unique_sources)}
         dest_indices = {d: i + len(unique_sources) for i, d in enumerate(unique_dests)}
 
-        mapped_sources = [src_indices[f"{s} (Source)"] for s in sources]
-        mapped_destinations = [dest_indices[f"{d} (Destination)"] for d in destinations]
+        mapped_sources = [src_indices[s] for s in sources]
+        mapped_destinations = [dest_indices[d] for d in destinations]
 
         node_colors = []
         for n in all_nodes:
-            if "United States" in n:
-                node_colors.append("#1f77b4")
-            elif "Germany" in n:
-                node_colors.append("#ff7f0e")
-            elif "Korea" in n:
-                node_colors.append("#2ca02c")
+            if n == "United States":
+                node_colors.append("#1f77b4")  # Blue
+            elif n == "Germany":
+                node_colors.append("#ff7f0e")  # Orange
+            elif n == "Korea":
+                node_colors.append("#2ca02c")  # Green
             else:
-                node_colors.append("#aec7e8")
+                node_colors.append("#aec7e8")  # Muted gray-blue
 
         sankey_fig = go.Figure(
             data=[
