@@ -175,7 +175,7 @@ if map_mode == "Animate Both (Loop)":
 # --- PLOT 2: CROSS-BORDER AI VENTURE CAPITAL FLOW (2021-2026) ---
 st.header("Cross-border AI Venture Capital Flow (2021-2026)")
 st.markdown(
-    "Interactive Sankey diagram tracking cross-border VC investments from source countries (left) to destination countries (right)."
+    "Interactive Sankey diagram tracking cross-border VC investments with year selection slider positioned below."
 )
 
 if all(
@@ -185,6 +185,7 @@ if all(
     min_yr = int(df_vc[vc_year_col].min())
     max_yr = int(df_vc[vc_year_col].max())
     
+    # Year slider placed directly below the chart intro
     selected_sankey_year = st.slider(
         "Select Year for Sankey Flow",
         min_yr,
@@ -201,7 +202,6 @@ if all(
         destinations = sankey_data[vc_dest_col].astype(str).tolist()
         values = sankey_data[vc_inv_col].tolist()
 
-        # Build separate source and destination node mappings to keep left/right structure clear
         unique_sources = [f"{s} (Source)" for s in sorted(list(set(sources)))]
         unique_dests = [f"{d} (Destination)" for d in sorted(list(set(destinations)))]
         all_nodes = unique_sources + unique_dests
@@ -212,10 +212,17 @@ if all(
         mapped_sources = [src_indices[f"{s} (Source)"] for s in sources]
         mapped_destinations = [dest_indices[f"{d} (Destination)"] for d in destinations]
 
-        node_colors = [
-            "#1f77b4" if "United States" in n else "#ff7f0e" if "Germany" in n else "#2ca02c" if "Korea" in n else "#aec7e8"
-            for n in all_nodes
-        ]
+        # Specific custom node colors for USA, Germany, Korea
+        node_colors = []
+        for n in all_nodes:
+            if "United States" in n:
+                node_colors.append("#1f77b4")  # Blue
+            elif "Germany" in n:
+                node_colors.append("#ff7f0e")  # Orange
+            elif "Korea" in n:
+                node_colors.append("#2ca02c")  # Green
+            else:
+                node_colors.append("#aec7e8")  # Light gray-blue
 
         sankey_fig = go.Figure(
             data=[
@@ -247,10 +254,10 @@ else:
     st.warning("Required columns missing in VC_Flow dataset.")
 
 
-# --- PLOT 3: DIVERGING HORIZONTAL BAR CHART (ALL COUNTRIES VISIBLE) ---
+# --- PLOT 3: DIVERGING HORIZONTAL BAR CHART (BLUE & LIGHT ACCENT) ---
 st.header("3. Comparative Governance Benchmarking (All Countries)")
 st.markdown(
-    "Diverging bar chart displaying all countries. United States, Germany, and Korea are highlighted in gold."
+    "Diverging bar chart displaying all countries. United States, Germany, and Korea are highlighted in gold/yellow accent."
 )
 
 latest_yr = df_gov[gov_year_col].max()
@@ -278,9 +285,9 @@ colors = []
 for _, row in bar_df.iterrows():
     c = row[gov_region_col]
     if c in focus_countries:
-        colors.append("gold")
+        colors.append("#ffbb78")  # Light accent color matching heatmap lightest tone
     else:
-        colors.append("mediumseagreen" if row["Divergence"] >= 0 else "coral")
+        colors.append("dodgerblue" if row["Divergence"] >= 0 else "lightcoral")
 
 bar_fig = go.Figure()
 bar_fig.add_trace(
@@ -312,101 +319,65 @@ bar_fig.update_layout(
 st.plotly_chart(bar_fig, use_container_width=True)
 
 
-# --- PLOTS 4, 5, & 6: COUNTRY DEEP-DIVE TIME SERIES ---
-st.header("4. Country Deep-Dives: VC Investment vs. Regulatory Governance")
+# --- PLOTS 4, 5, & 6: SIDE-BY-SIDE COUNTRY DEEP-DIVE PANELS ---
+st.header("4. Country Deep-Dives: Investment Trend & Governance Comparison")
 st.markdown(
-    "Dual-axis time series tracking Investment ($M USD) from VC_Flow on primary Y-axis, and Country Score / OECD Average from Regulatory Governance on secondary Y-axis (0–4 range)."
+    "Side-by-side panels: Left panel shows investment trend (2021–2026); right panel displays double-bar comparative governance performance (2021 vs 2024)."
 )
 
 for country in selected_deepdive_countries:
-    st.subheader(f"Deep-Dive: {country}")
+    st.subheader(f"Deep-Dive Panel: {country}")
+    
+    sub_col1, sub_col2 = st.columns(2)
 
-    # Primary Y-axis: Investment from VC_Flow dataset
-    inv_ts = (
-        df_vc[df_vc[vc_dest_col] == country]
-        .groupby(vc_year_col, as_index=False)[vc_inv_col]
-        .sum()
-        .rename(columns={vc_year_col: "Year", vc_inv_col: "Investment"})
-    )
-
-    # Secondary Y-axis: Country Governance Score from Regulatory Governance dataset
-    gov_ts = (
-        df_gov[df_gov[gov_region_col] == country]
-        .groupby(gov_year_col, as_index=False)[gov_val_col]
-        .mean()
-        .rename(columns={gov_year_col: "Year", gov_val_col: "Score"})
-    )
-
-    # Secondary Y-axis: OECD Average from Regulatory Governance dataset
-    oecd_ts = (
-        df_gov[
-            df_gov[gov_region_col].str.contains(
-                "OECD average", case=False, na=False
-            )
-        ]
-        .groupby(gov_year_col, as_index=False)[gov_val_col]
-        .mean()
-        .rename(columns={gov_year_col: "Year", gov_val_col: "OECD_Avg"})
-    )
-
-    merged_ts = pd.merge(inv_ts, gov_ts, on="Year", how="outer")
-    merged_ts = pd.merge(merged_ts, oecd_ts, on="Year", how="outer").sort_values(
-        "Year"
-    )
-
-    if not merged_ts.empty:
-        fig_dual = make_subplots(specs=[[{"secondary_y": True}]])
-
-        # Investment Line Graph (Primary Y-Axis)
-        fig_dual.add_trace(
-            go.Scatter(
-                x=merged_ts["Year"],
-                y=merged_ts["Investment"],
-                name="Investment ($M USD)",
-                line=dict(color="red", width=3),
-                mode="lines+markers",
-            ),
-            secondary_y=False,
+    with sub_col1:
+        # Panel 1: Investment Trend (2021-2026)
+        inv_ts = (
+            df_vc[df_vc[vc_dest_col] == country]
+            .groupby(vc_year_col, as_index=False)[vc_inv_col]
+            .sum()
+            .rename(columns={vc_year_col: "Year", vc_inv_col: "Investment"})
         )
+        
+        fig_inv = px.line(
+            inv_ts,
+            x="Year",
+            y="Investment",
+            markers=True,
+            title=f"{country}: Investment Trend ($M USD)",
+            labels={"Investment": "Investment ($M USD)", "Year": "Year"}
+        )
+        fig_inv.update_traces(line=dict(color="crimson", width=3))
+        fig_inv.update_layout(height=400)
+        st.plotly_chart(fig_inv, use_container_width=True)
 
-        # Country Governance Score (Secondary Y-Axis, range 0-4)
-        fig_dual.add_trace(
-            go.Scatter(
-                x=merged_ts["Year"],
-                y=merged_ts["Score"],
-                name=f"{country} Governance Score",
-                line=dict(color="blue", width=3),
-                mode="lines+markers",
-            ),
-            secondary_y=True,
+    with sub_col2:
+        # Panel 2: Double-Bar Comparative Governance (2021 & 2024, Scale 0-4)
+        gov_comp = df_gov[
+            (df_gov[gov_region_col].isin([country])) |
+            (df_gov[gov_region_col].str.contains("OECD average", case=False, na=False))
+        ].copy()
+        
+        gov_comp["Entity"] = gov_comp[gov_region_col].apply(
+            lambda x: "OECD Average" if "OECD average" in str(x) else country
         )
+        
+        gov_grouped = gov_comp.groupby(["Year", "Entity"], as_index=False)[gov_val_col].mean()
+        gov_grouped = gov_grouped[gov_grouped["Year"].isin([2021, 2024])]
 
-        # OECD Average Score (Secondary Y-Axis, range 0-4)
-        fig_dual.add_trace(
-            go.Scatter(
-                x=merged_ts["Year"],
-                y=merged_ts["OECD_Avg"],
-                name="OECD Average Score",
-                line=dict(color="gray", width=2, dash="dash"),
-                mode="lines",
-            ),
-            secondary_y=True,
+        fig_bars = px.bar(
+            gov_grouped,
+            x="Year",
+            y=gov_val_col,
+            color="Entity",
+            barmode="group",
+            title=f"{country} vs. OECD Average Governance (0–4)",
+            labels={gov_val_col: "Governance Score (0–4)", "Year": "Year"},
+            color_discrete_map={country: "royalblue", "OECD Average": "gray"}
         )
-
-        fig_dual.update_layout(
-            title=f"{country}: Investment Flow vs. Regulatory Compliance",
-            xaxis=dict(title="Year", dtick=1),
-            height=450,
-        )
-        fig_dual.update_yaxes(
-            title_text="Investment (in millions USD)", secondary_y=False
-        )
-        fig_dual.update_yaxes(
-            title_text="Regulatory Governance Score (0 - 4)",
-            secondary_y=True,
-            range=[0, 4],
-        )
-        st.plotly_chart(fig_dual, use_container_width=True)
+        fig_bars.update_yaxis(range=[0, 4])
+        fig_bars.update_layout(height=400)
+        st.plotly_chart(fig_bars, use_container_width=True)
 
 
 # --- PLOT 5 & 6: HEATMAPS ---
@@ -415,12 +386,11 @@ st.header("5. Comparative Heatmaps")
 col_hm1, col_hm2 = st.columns(2)
 
 with col_hm1:
-    st.subheader("VC Flow YoY % Change Heatmap (Descending)")
+    st.markdown("<h3 style='font-size:18px;'>VC Flow YoY % Change Heatmap</h3>", unsafe_allow_html=True)
     vc_no_china = df_vc[
         ~df_vc[vc_dest_col].str.contains("China", case=False, na=False)
     ]
     
-    # Pivot: Countries (Destination) on Y-axis, Years on X-axis (excluding base year 2021)
     piv_vc = (
         vc_no_china.pivot_table(
             index=vc_dest_col,
@@ -437,23 +407,23 @@ with col_hm1:
 
     if not piv_vc.empty:
         piv_vc = piv_vc.round(2)
-        # Sort rows in descending order based on average YoY % change so best performers sit at the top
-        piv_vc["mean_perf"] = piv_vc.mean(axis=1)
-        piv_vc = piv_vc.sort_values(by="mean_perf", ascending=False).drop(columns="mean_perf")
+        # Sort in descending order based on 2026 performance so best performers sit at the top
+        sort_col = 2026 if 2026 in piv_vc.columns else piv_vc.columns[-1]
+        piv_vc = piv_vc.sort_values(by=sort_col, ascending=False)
 
         fig_hm1 = px.imshow(
             piv_vc,
             labels=dict(x="Year", y="Country", color="YoY % Change (%)"),
-            title="VC Flow YoY % Change (Countries on Y, Years on X)",
+            title="",
             color_continuous_scale="RdBu",
             text_auto=True,
             aspect="auto",
         )
-        fig_hm1.update_layout(height=600)
+        fig_hm1.update_layout(height=550, margin=dict(t=10, b=10))
         st.plotly_chart(fig_hm1, use_container_width=True)
 
 with col_hm2:
-    st.subheader("2024 Regulatory Governance (Score >= 0.75)")
+    st.markdown("<h3 style='font-size:18px;'>2024 Regulatory Governance (Score ≥ 0.75)</h3>", unsafe_allow_html=True)
     gov_2024 = df_gov[
         (df_gov[gov_year_col] == 2024)
         & (
@@ -472,7 +442,7 @@ with col_hm2:
 
     if not gov_2024_filtered.empty:
         colors_hm2 = [
-            "gold" if c in focus_countries else "mediumseagreen"
+            "#ffbb78" if c in focus_countries else "dodgerblue"
             for c in gov_2024_filtered[gov_region_col]
         ]
 
@@ -487,9 +457,10 @@ with col_hm2:
             )
         )
         bar_hm2.update_layout(
-            title="2024 Regulatory Governance (Scores >= 0.75)",
+            title="",
             xaxis_title="Score",
             yaxis=dict(title="Country", tickfont=dict(size=9)),
-            height=600,
+            height=550,
+            margin=dict(t=10, b=10),
         )
         st.plotly_chart(bar_hm2, use_container_width=True)
