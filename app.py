@@ -53,7 +53,7 @@ target_countries = st.sidebar.multiselect(
 # --- SECTION 1: REGULATORY GOVERNANCE SCORE MAP ---
 st.header("Regulatory Governance Score")
 st.markdown(
-    "Interactive choropleth map displaying OECD regulatory governance performance. Unselected countries appear in muted gray. Toggle year view or use the automatic animation loop."
+    "Interactive choropleth map displaying OECD regulatory governance performance. Colors are dynamically scaled to highlight relative performance (Green = Above Average, Orange/Red = Below Average). Unselected countries appear in muted gray."
 )
 
 if all(c in df_gov.columns for c in ["Region", "Year", "VALUE (0 - 4)"]):
@@ -84,8 +84,10 @@ if all(c in df_gov.columns for c in ["Region", "Year", "VALUE (0 - 4)"]):
         axis=1
     )
 
-    # Calculate precise color scale midpoint around OECD average (~0.7825) given scores cluster under 2.0
-    oecd_avg_val = 0.7825
+    # Calculate dynamic min, max, and mean based on data distribution so contrast is visible
+    data_min = float(map_df["Score"].min())
+    data_max = float(map_df["Score"].max())
+    data_mean = float(map_df["Score"].mean())
 
     if map_year_mode != "Animate Both (Loop)":
         target_yr = 2021 if map_year_mode == "2021" else 2024
@@ -99,8 +101,8 @@ if all(c in df_gov.columns for c in ["Region", "Year", "VALUE (0 - 4)"]):
             hover_name="Country",
             hover_data={"Score": True, "Plot Score": False},
             color_continuous_scale="RdYlGn",
-            color_continuous_midpoint=oecd_avg_val,
-            range_color=[0, 4],
+            color_continuous_midpoint=data_mean,
+            range_color=[data_min, data_max],
             title=f"Regulatory Governance Scores ({target_yr})",
         )
     else:
@@ -113,15 +115,14 @@ if all(c in df_gov.columns for c in ["Region", "Year", "VALUE (0 - 4)"]):
             hover_name="Country",
             hover_data={"Score": True, "Plot Score": False},
             color_continuous_scale="RdYlGn",
-            color_continuous_midpoint=oecd_avg_val,
-            range_color=[0, 4],
+            color_continuous_midpoint=data_mean,
+            range_color=[data_min, data_max],
             title="OECD Regulatory Governance Score Evolution (2021 vs 2024 Loop)",
         )
-        # Configure automatic loop & frame duration
+        # Configure automatic loop & frame transition speed
         if len(fig_map.layout.updatemenus) > 0:
             fig_map.layout.updatemenus[0].buttons[0].args[1]["frame"]["duration"] = 2500
             fig_map.layout.updatemenus[0].buttons[0].args[1]["transition"]["duration"] = 1000
-            # Enable auto-play loop transition configuration
             fig_map.layout.updatemenus[0].buttons[0].args[1]["transition"]["easing"] = "cubic-in-out"
 
     fig_map.update_layout(
@@ -131,11 +132,10 @@ if all(c in df_gov.columns for c in ["Region", "Year", "VALUE (0 - 4)"]):
             projection_type="natural earth",
             bgcolor="rgba(0,0,0,0)",
         ),
-        coloraxis_colorbar=dict(title="Score (0-4)<br>(Mid: 0.7825)"),
+        coloraxis_colorbar=dict(title=f"Score<br>(Mean: {data_mean:.2f})"),
         height=600,
         margin=dict(l=0, r=0, t=50, b=0),
     )
-    # Set unselected/missing regions to clean light gray
     fig_map.update_traces(marker_line_width=0.5, selector=dict(type='choropleth'))
     st.plotly_chart(fig_map, use_container_width=True)
 else:
