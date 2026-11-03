@@ -185,7 +185,6 @@ if all(
     min_yr = int(df_vc[vc_year_col].min())
     max_yr = int(df_vc[vc_year_col].max())
     
-    # Year slider placed directly below the chart intro
     selected_sankey_year = st.slider(
         "Select Year for Sankey Flow",
         min_yr,
@@ -212,7 +211,6 @@ if all(
         mapped_sources = [src_indices[f"{s} (Source)"] for s in sources]
         mapped_destinations = [dest_indices[f"{d} (Destination)"] for d in destinations]
 
-        # Specific custom node colors for USA, Germany, Korea
         node_colors = []
         for n in all_nodes:
             if "United States" in n:
@@ -222,7 +220,7 @@ if all(
             elif "Korea" in n:
                 node_colors.append("#2ca02c")  # Green
             else:
-                node_colors.append("#aec7e8")  # Light gray-blue
+                node_colors.append("#aec7e8")
 
         sankey_fig = go.Figure(
             data=[
@@ -254,10 +252,10 @@ else:
     st.warning("Required columns missing in VC_Flow dataset.")
 
 
-# --- PLOT 3: DIVERGING HORIZONTAL BAR CHART (BLUE & LIGHT ACCENT) ---
+# --- PLOT 3: DIVERGING HORIZONTAL BAR CHART ---
 st.header("3. Comparative Governance Benchmarking (All Countries)")
 st.markdown(
-    "Diverging bar chart displaying all countries. United States, Germany, and Korea are highlighted in gold/yellow accent."
+    "Diverging bar chart displaying all countries. United States, Germany, and Korea are highlighted in light accent."
 )
 
 latest_yr = df_gov[gov_year_col].max()
@@ -285,7 +283,7 @@ colors = []
 for _, row in bar_df.iterrows():
     c = row[gov_region_col]
     if c in focus_countries:
-        colors.append("#ffbb78")  # Light accent color matching heatmap lightest tone
+        colors.append("#ffbb78")
     else:
         colors.append("dodgerblue" if row["Divergence"] >= 0 else "lightcoral")
 
@@ -331,7 +329,6 @@ for country in selected_deepdive_countries:
     sub_col1, sub_col2 = st.columns(2)
 
     with sub_col1:
-        # Panel 1: Investment Trend (2021-2026)
         inv_ts = (
             df_vc[df_vc[vc_dest_col] == country]
             .groupby(vc_year_col, as_index=False)[vc_inv_col]
@@ -352,7 +349,6 @@ for country in selected_deepdive_countries:
         st.plotly_chart(fig_inv, use_container_width=True)
 
     with sub_col2:
-        # Panel 2: Double-Bar Comparative Governance (2021 & 2024, Scale 0-4)
         gov_comp = df_gov[
             (df_gov[gov_region_col].isin([country])) |
             (df_gov[gov_region_col].str.contains("OECD average", case=False, na=False))
@@ -375,7 +371,8 @@ for country in selected_deepdive_countries:
             labels={gov_val_col: "Governance Score (0–4)", "Year": "Year"},
             color_discrete_map={country: "royalblue", "OECD Average": "gray"}
         )
-        fig_bars.update_yaxis(range=[0, 4])
+        # Fixed update_yaxes call
+        fig_bars.update_yaxes(range=[0, 4])
         fig_bars.update_layout(height=400)
         st.plotly_chart(fig_bars, use_container_width=True)
 
@@ -407,7 +404,6 @@ with col_hm1:
 
     if not piv_vc.empty:
         piv_vc = piv_vc.round(2)
-        # Sort in descending order based on 2026 performance so best performers sit at the top
         sort_col = 2026 if 2026 in piv_vc.columns else piv_vc.columns[-1]
         piv_vc = piv_vc.sort_values(by=sort_col, ascending=False)
 
