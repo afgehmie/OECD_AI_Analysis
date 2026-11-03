@@ -70,6 +70,16 @@ vc_year_col = next(
     (c for c in df_vc.columns if "year" in c.lower()), df_vc.columns[5]
 )
 
+# Robustly clean and convert investment column to numeric (handles strings/commas)
+if df_vc[vc_inv_col].dtype == object:
+    df_vc[vc_inv_col] = (
+        df_vc[vc_inv_col]
+        .astype(str)
+        .str.replace(",", "", regex=True)
+        .str.strip()
+    )
+df_vc[vc_inv_col] = pd.to_numeric(df_vc[vc_inv_col], errors="coerce")
+
 # Sidebar focus control
 st.sidebar.header("Global Dashboard Controls")
 focus_countries = ["United States", "Germany", "Korea"]
@@ -101,6 +111,7 @@ map_df = (
         }
     )
 )
+map_df["Year"] = map_df["Year"].astype(int)
 
 all_countries_list = sorted(map_df["Country"].unique().tolist())
 
@@ -182,6 +193,7 @@ if all(
     c in df_vc.columns
     for c in [vc_src_col, vc_dest_col, vc_inv_col, vc_year_col]
 ):
+    df_vc[vc_year_col] = df_vc[vc_year_col].astype(int)
     min_yr = int(df_vc[vc_year_col].min())
     max_yr = int(df_vc[vc_year_col].max())
     
@@ -213,14 +225,14 @@ if all(
 
         node_colors = []
         for n in all_nodes:
-            if n == "United States" or n == "USA":
-                node_colors.append("#1f77b4")  # Blue
-            elif n == "Germany" or n == "DEU":
-                node_colors.append("#ff7f0e")  # Orange
-            elif n == "Korea" or n == "KOR":
-                node_colors.append("#2ca02c")  # Green
+            if n == "United States":
+                node_colors.append("#1f77b4")
+            elif n == "Germany":
+                node_colors.append("#ff7f0e")
+            elif n == "Korea":
+                node_colors.append("#2ca02c")
             else:
-                node_colors.append("#aec7e8")  # Muted gray-blue
+                node_colors.append("#aec7e8")
 
         sankey_fig = go.Figure(
             data=[
@@ -258,6 +270,7 @@ st.markdown(
     "Diverging bar chart displaying all countries. United States, Germany, and Korea are highlighted with light accent."
 )
 
+df_gov[gov_year_col] = df_gov[gov_year_col].astype(int)
 latest_yr = df_gov[gov_year_col].max()
 latest_gov = df_gov[df_gov[gov_year_col] == latest_yr].copy()
 
@@ -329,12 +342,14 @@ for country in selected_deepdive_countries:
     sub_col1, sub_col2 = st.columns(2)
 
     with sub_col1:
+        # Group and sum cleaned numeric investment data by year
         inv_ts = (
             df_vc[df_vc[vc_dest_col] == country]
             .groupby(vc_year_col, as_index=False)[vc_inv_col]
             .sum()
             .rename(columns={vc_year_col: "Year", vc_inv_col: "Investment"})
         )
+        inv_ts["Year"] = inv_ts["Year"].astype(int)
         
         fig_inv = px.line(
             inv_ts,
@@ -345,7 +360,10 @@ for country in selected_deepdive_countries:
             labels={"Investment": "Investment ($M USD)", "Year": "Year"}
         )
         fig_inv.update_traces(line=dict(color="crimson", width=3))
-        fig_inv.update_layout(height=400)
+        fig_inv.update_layout(
+            height=400,
+            xaxis=dict(tickmode="linear", dtick=1)
+        )
         st.plotly_chart(fig_inv, use_container_width=True)
 
     with sub_col2:
@@ -354,6 +372,7 @@ for country in selected_deepdive_countries:
             (df_gov[gov_region_col].str.contains("OECD average", case=False, na=False))
         ].copy()
         
+        gov_comp["Year"] = gov_comp["Year"].astype(int)
         gov_comp["Entity"] = gov_comp[gov_region_col].apply(
             lambda x: "OECD Average" if "OECD average" in str(x) else country
         )
@@ -372,7 +391,10 @@ for country in selected_deepdive_countries:
             color_discrete_map={country: "royalblue", "OECD Average": "gray"}
         )
         fig_bars.update_yaxes(range=[0, 4])
-        fig_bars.update_layout(height=400)
+        fig_bars.update_layout(
+            height=400,
+            xaxis=dict(tickmode="linear", dtick=3)
+        )
         st.plotly_chart(fig_bars, use_container_width=True)
 
 
