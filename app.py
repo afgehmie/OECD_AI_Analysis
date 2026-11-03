@@ -90,7 +90,7 @@ selected_deepdive_countries = st.sidebar.multiselect(
 # --- PLOT 1: REGULATORY GOVERNANCE SCORE MAP ---
 st.header("1. Regulatory Governance Score Map")
 st.markdown(
-    "Choropleth map framed across North America, Europe, North Africa, and Asia (excluding Australia)."
+    "Choropleth map framed across North America, Europe, North Africa, and Asia with country labels."
 )
 
 map_df = (
@@ -153,6 +153,35 @@ fig_map = px.choropleth(
     title=f"Regulatory Governance Scores ({current_map_year})",
 )
 
+# Add explicit country text labels on the map for highlighted/focus countries
+country_coords = {
+    "United States": {"lat": 38.0, "lon": -95.0},
+    "Germany": {"lat": 51.0, "lon": 10.0},
+    "Korea": {"lat": 36.0, "lon": 127.5},
+    "United Kingdom": {"lat": 55.0, "lon": -3.0},
+    "France": {"lat": 46.0, "lon": 2.0},
+    "Japan": {"lat": 36.0, "lon": 138.0},
+    "Canada": {"lat": 56.0, "lon": -106.0},
+}
+lbl_lats, lbl_lons, lbl_texts = [], [], []
+for c in highlight_map:
+    if c in country_coords:
+        lbl_lats.append(country_coords[c]["lat"])
+        lbl_lons.append(country_coords[c]["lon"])
+        lbl_texts.append(c)
+
+if lbl_texts:
+    fig_map.add_trace(
+        go.Scattergeo(
+            lat=lbl_lats,
+            lon=lbl_lons,
+            text=lbl_texts,
+            mode="text",
+            textfont=dict(size=10, color="black", family="Arial Black"),
+            showlegend=False
+        )
+    )
+
 fig_map.update_layout(
     geo=dict(
         showframe=False,
@@ -177,7 +206,7 @@ if map_mode == "Animate Both (Loop)":
 
 
 # --- PLOT 2: CROSS-BORDER AI VENTURE CAPITAL FLOW (2021-2026) ---
-st.header("Cross-border AI Venture Capital Flow (2021-2026)")
+st.header("2. Cross-border AI Venture Capital Flow (2021-2026)")
 st.markdown(
     "Interactive Sankey diagram tracking cross-border VC investments from source countries (left) to destination countries (right)."
 )
@@ -189,9 +218,6 @@ if all(
     df_vc[vc_year_col] = df_vc[vc_year_col].astype(int)
     available_sankey_years = sorted(df_vc[vc_year_col].unique().tolist())
     
-    sankey_chart_placeholder = st.empty()
-    
-    # Sankey View Mode (Select specific year or continuous loop animation)
     sankey_options = [str(y) for y in available_sankey_years] + ["Animate (Loop 2021-2026)"]
     sankey_mode = st.radio(
         "Select Year or Animate Sankey Flow",
@@ -206,6 +232,8 @@ if all(
         current_sankey_year = available_sankey_years[st.session_state.sankey_loop_idx]
     else:
         current_sankey_year = int(sankey_mode)
+
+    sankey_container = st.empty()
 
     sankey_data = df_vc[df_vc[vc_year_col] == current_sankey_year].groupby(
         [vc_src_col, vc_dest_col], as_index=False
@@ -258,11 +286,12 @@ if all(
         sankey_fig.update_layout(
             title_text=f"Cross-border AI VC Flow ({current_sankey_year})",
             font_size=11,
-            height=600,
+            height=580,
+            margin=dict(t=30, b=10, l=10, r=10)
         )
-        sankey_chart_placeholder.plotly_chart(sankey_fig, use_container_width=True)
+        sankey_container.plotly_chart(sankey_fig, use_container_width=True)
     else:
-        sankey_chart_placeholder.info("No VC records available for the selected year.")
+        sankey_container.info("No VC records available for the selected year.")
 
     if sankey_mode == "Animate (Loop 2021-2026)":
         time.sleep(2.0)
@@ -361,7 +390,6 @@ for country in selected_deepdive_countries:
         if not inv_ts.empty:
             trend_years = sorted(inv_ts["Year"].unique().tolist())
             
-            # Animation / Year Selection radio option matching Plot 1 style
             trend_options = [str(y) for y in trend_years] + ["Animate (Loop 2021-2026)"]
             trend_mode = st.radio(
                 f"Select Year or Animate {country} Investment",
@@ -380,7 +408,6 @@ for country in selected_deepdive_countries:
 
             fig_inv = go.Figure()
             
-            # Base trendline with all text labels
             fig_inv.add_trace(
                 go.Scatter(
                     x=inv_ts["Year"],
@@ -394,7 +421,6 @@ for country in selected_deepdive_countries:
                 )
             )
 
-            # Big blue point moving from year to year along the trendline
             active_point = inv_ts[inv_ts["Year"] == active_trend_year]
             if not active_point.empty:
                 fig_inv.add_trace(
