@@ -43,7 +43,7 @@ if err:
     )
     st.stop()
 
-# Flexibly resolve column names
+# Flexibly resolve column names for Governance dataset
 gov_region_col = next(
     (c for c in df_gov.columns if c.lower() in ["region", "country"]),
     df_gov.columns[0],
@@ -57,18 +57,21 @@ gov_val_col = next(
     df_gov.columns[3] if len(df_gov.columns) > 3 else df_gov.columns[0],
 )
 
-vc_dest_col = next(
-    (c for c in df_vc.columns if "dest" in c.lower()), df_vc.columns[1]
-)
-vc_src_col = next(
-    (c for c in df_vc.columns if "source" in c.lower()), df_vc.columns[2]
-)
-vc_inv_col = next(
-    (c for c in df_vc.columns if "invest" in c.lower()), df_vc.columns[4]
-)
-vc_year_col = next(
-    (c for c in df_vc.columns if "year" in c.lower()), df_vc.columns[5]
-)
+# Explicitly lock down VC_Flow columns based on user dataset structure (Col B: Destination, Col E: Investment, Col F: Year)
+vc_dest_col = df_vc.columns[1] if len(df_vc.columns) > 1 else df_vc.columns[0]
+vc_src_col = df_vc.columns[3] if len(df_vc.columns) > 3 else df_vc.columns[2]
+vc_inv_col = df_vc.columns[4] if len(df_vc.columns) > 4 else df_vc.columns[4]
+vc_year_col = df_vc.columns[5] if len(df_vc.columns) > 5 else df_vc.columns[5]
+
+# Robustly clean and convert investment column to numeric
+if df_vc[vc_inv_col].dtype == object:
+    df_vc[vc_inv_col] = (
+        df_vc[vc_inv_col]
+        .astype(str)
+        .str.replace(",", "", regex=True)
+        .str.strip()
+    )
+df_vc[vc_inv_col] = pd.to_numeric(df_vc[vc_inv_col], errors="coerce")
 
 # Sidebar focus control
 st.sidebar.header("Global Dashboard Controls")
@@ -176,7 +179,7 @@ if map_mode == "Animate Both (Loop)":
 # --- PLOT 2: CROSS-BORDER AI VENTURE CAPITAL FLOW (2021-2026) ---
 st.header("Cross-border AI Venture Capital Flow (2021-2026)")
 st.markdown(
-    "Interactive Sankey diagram tracking cross-border VC investments from source countries (left) to destination countries (right) with the year scale below."
+    "Interactive Sankey diagram tracking cross-border VC investments from source countries (left) to destination countries (right)."
 )
 
 if all(
@@ -187,6 +190,10 @@ if all(
     min_yr = int(df_vc[vc_year_col].min())
     max_yr = int(df_vc[vc_year_col].max())
     
+    # Sankey render first
+    sankey_placeholder = st.empty()
+    
+    # Year slider placed cleanly at the bottom as requested
     selected_sankey_year = st.slider(
         "Select Year for Sankey Flow",
         min_yr,
@@ -213,16 +220,17 @@ if all(
         mapped_sources = [src_indices[s] for s in sources]
         mapped_destinations = [dest_indices[d] for d in destinations]
 
+        # Explicit custom coloring for United States, Germany, and Korea
         node_colors = []
         for n in all_nodes:
             if n == "United States":
-                node_colors.append("#1f77b4")
+                node_colors.append("#1f77b4")  # Blue
             elif n == "Germany":
-                node_colors.append("#ff7f0e")
+                node_colors.append("#ff7f0e")  # Orange
             elif n == "Korea":
-                node_colors.append("#2ca02c")
+                node_colors.append("#2ca02c")  # Green
             else:
-                node_colors.append("#aec7e8")
+                node_colors.append("#aec7e8")  # Muted gray-blue
 
         sankey_fig = go.Figure(
             data=[
@@ -245,7 +253,7 @@ if all(
         sankey_fig.update_layout(
             title_text=f"Cross-border AI VC Flow ({selected_sankey_year})",
             font_size=11,
-            height=650,
+            height=600,
         )
         st.plotly_chart(sankey_fig, use_container_width=True)
     else:
@@ -317,7 +325,7 @@ bar_fig.update_layout(
         )
     ],
 )
-st.plotly_chart(bar_fig, use_container_width=True)
+st.plotly_chart(bar_bar_fig := bar_fig, use_container_width=True)
 
 
 # --- PLOTS 4, 5, & 6: SIDE-BY-SIDE COUNTRY DEEP-DIVE PANELS ---
@@ -332,9 +340,9 @@ for country in selected_deepdive_countries:
     sub_col1, sub_col2 = st.columns(2)
 
     with sub_col1:
-        # Explicitly aggregate column E (Investment) grouped by numeric year
+        # Left Panel: Investment Trend from column E grouped by year
         inv_ts = (
-            df_vc[df_vc[vc_dest_col] == country]
+            df_vc[df_vc[vc_dest_col].astype(str).str.strip().str.lower() == country.strip().lower()]
             .groupby(vc_year_col, as_index=False)[vc_inv_col]
             .sum()
             .rename(columns={vc_year_col: "Year", vc_inv_col: "Investment"})
@@ -357,8 +365,9 @@ for country in selected_deepdive_countries:
         st.plotly_chart(fig_inv, use_container_width=True)
 
     with sub_col2:
+        # Right Panel: Double-Bar Comparative Governance
         gov_comp = df_gov[
-            (df_gov[gov_region_col].isin([country])) |
+            (df_gov[gov_region_col].astype(str).str.strip().str.lower() == country.strip().lower()) |
             (df_gov[gov_region_col].str.contains("OECD average", case=False, na=False))
         ].copy()
         
