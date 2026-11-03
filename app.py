@@ -190,7 +190,9 @@ if all(
     min_yr = int(df_vc[vc_year_col].min())
     max_yr = int(df_vc[vc_year_col].max())
     
-    # Year slider placed cleanly right below the chart header/description as requested
+    # Placeholder for Sankey chart first, so slider sits strictly BELOW the chart
+    sankey_chart_placeholder = st.empty()
+    
     selected_sankey_year = st.slider(
         "Select Year for Sankey Flow",
         min_yr,
@@ -218,7 +220,6 @@ if all(
         mapped_sources = [src_indices[s] for s in sources]
         mapped_destinations = [dest_indices[d] for d in destinations]
 
-        # Explicit custom coloring for United States, Germany, and Korea
         node_colors = []
         for n in all_nodes:
             if n == "United States":
@@ -253,9 +254,9 @@ if all(
             font_size=11,
             height=600,
         )
-        st.plotly_chart(sankey_fig, use_container_width=True)
+        sankey_chart_placeholder.plotly_chart(sankey_fig, use_container_width=True)
     else:
-        st.info("No VC records available for the selected year.")
+        sankey_chart_placeholder.info("No VC records available for the selected year.")
 else:
     st.warning("Required columns missing in VC_Flow dataset.")
 
@@ -329,16 +330,15 @@ st.plotly_chart(bar_fig, use_container_width=True)
 # --- PLOTS 4, 5, & 6: SIDE-BY-SIDE COUNTRY DEEP-DIVE PANELS ---
 st.header("4. Country Deep-Dives: Investment Trend & Governance Comparison")
 st.markdown(
-    "Side-by-side panels: Left panel shows animated investment trend (2021–2026) with running blue point; right panel displays labeled double-bar comparative governance performance."
+    "Side-by-side panels: Left panel shows animated investment trend (2021–2026) along the trendline; right panel displays labeled double-bar comparative governance performance."
 )
 
 for country in selected_deepdive_countries:
     st.subheader(f"Deep-Dive Panel: {country}")
     
-    sub_col1, sub_col2 = sub_col_2 = st.columns(2)
+    sub_col1, sub_col2 = st.columns(2)
 
     with sub_col1:
-        # Left Panel: Animated Investment Trend with Big Blue Point and Value Labels
         inv_ts = (
             df_vc[df_vc[vc_dest_col].astype(str).str.strip().str.lower() == country.strip().lower()]
             .groupby(vc_year_col, as_index=False)[vc_inv_col]
@@ -346,12 +346,11 @@ for country in selected_deepdive_countries:
             .rename(columns={vc_year_col: "Year", vc_inv_col: "Investment"})
         )
         inv_ts["Year"] = inv_ts["Year"].astype(int)
-        inv_ts["Frame_Sort"] = inv_ts["Year"]
 
         if not inv_ts.empty:
             fig_inv = go.Figure()
             
-            # Add base trendline with text labels for each year
+            # Base trendline with value labels
             fig_inv.add_trace(
                 go.Scatter(
                     x=inv_ts["Year"],
@@ -365,11 +364,10 @@ for country in selected_deepdive_countries:
                 )
             )
 
-            # Build frames for animated big blue point moving year by year
+            # Build frames for running blue point animation along the trendline
             frames = []
             years_sorted = sorted(inv_ts["Year"].unique())
             for yr in years_sorted:
-                subset = inv_ts[inv_ts["Year"] <= yr]
                 current_pt = inv_ts[inv_ts["Year"] == yr]
                 
                 frame_data = [
@@ -393,16 +391,21 @@ for country in selected_deepdive_countries:
 
             fig_inv.frames = frames
 
-            # Add Play/Pause animation buttons
+            # Position play/pause button cleanly in top-left margin so it never overlaps Y-axis label
             fig_inv.update_layout(
                 title=f"{country}: Animated Investment Trend ($M USD)",
                 xaxis=dict(title="Year", tickmode="linear", dtick=1),
                 yaxis=dict(title="Investment ($M USD)"),
                 height=400,
+                margin=dict(t=80),
                 updatemenus=[
                     dict(
                         type="buttons",
                         showactive=False,
+                        x=0.0,
+                        y=1.20,
+                        xanchor="left",
+                        yanchor="top",
                         buttons=[
                             dict(
                                 label="Play",
@@ -430,25 +433,6 @@ for country in selected_deepdive_countries:
                             ),
                         ],
                     )
-                ],
-                sliders=[
-                    dict(
-                        steps=[
-                            dict(
-                                method="animate",
-                                args=[[str(yr)], dict(mode="immediate", frame=dict(duration=300, redraw=True))],
-                                label=str(yr),
-                            )
-                            for yr in years_sorted
-                        ],
-                        active=0,
-                        transition=dict(duration=300),
-                        x=0.1,
-                        len=0.9,
-                        xanchor="left",
-                        y=-0.2,
-                        yanchor="top",
-                    )
                 ]
             )
             st.plotly_chart(fig_inv, use_container_width=True)
@@ -456,7 +440,6 @@ for country in selected_deepdive_countries:
             st.info(f"No investment data found for {country}.")
 
     with sub_col2:
-        # Right Panel: Double-Bar Comparative Governance with explicit value text labels on bars
         gov_comp = df_gov[
             (df_gov[gov_region_col].astype(str).str.strip().str.lower() == country.strip().lower()) |
             (df_gov[gov_region_col].str.contains("OECD average", case=False, na=False))
