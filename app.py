@@ -118,7 +118,6 @@ with col2:
         default=[c for c in focus_countries if c in all_countries_list],
     )
 
-# Continuous loop state handling
 if map_mode == "Animate Both (Loop)":
     if "map_loop_year" not in st.session_state:
         st.session_state.map_loop_year = 2021
@@ -150,7 +149,6 @@ fig_map = px.choropleth(
     title=f"Regulatory Governance Scores ({current_map_year})",
 )
 
-# Centered bounding box including North America, Europe, Africa, & Asia (excluding Australia)
 fig_map.update_layout(
     geo=dict(
         showframe=False,
@@ -166,7 +164,6 @@ fig_map.update_layout(
 )
 st.plotly_chart(fig_map, use_container_width=True)
 
-# Trigger auto-refresh loop for year switching
 if map_mode == "Animate Both (Loop)":
     time.sleep(2.5)
     st.session_state.map_loop_year = (
@@ -175,26 +172,21 @@ if map_mode == "Animate Both (Loop)":
     st.rerun()
 
 
-# --- PLOT 2: ANIMATED SANKEY DIAGRAM ---
-st.header("2. Animated Sankey Diagram: VC Flow (2021–2026)")
+# --- PLOT 2: AUTOMATIC SANKEY DIAGRAM ---
+st.header("2. Automated Sankey Diagram: Cross-Border AI VC Flow (2021–2026)")
 st.markdown(
-    "Tracking venture capital investment flows from source countries to destination countries."
+    "Automatically displaying cross-border investment flows from source countries to destination countries across all years."
 )
 
-vc_filtered = df_vc[
-    df_vc[vc_dest_col].isin(selected_deepdive_countries)
-].copy()
-
-if not vc_filtered.empty:
-    selected_sankey_year = st.slider(
-        "Select Year for Sankey Flow",
-        int(vc_filtered[vc_year_col].min()),
-        int(vc_filtered[vc_year_col].max()),
-        2021,
+if all(
+    c in df_vc.columns
+    for c in [vc_src_col, vc_dest_col, vc_inv_col, vc_year_col]
+):
+    # Aggregate automatically across all data without manual filters
+    sankey_data = (
+        df_vc.groupby([vc_src_col, vc_dest_col], as_index=False)[vc_inv_col]
+        .sum()
     )
-    sankey_data = vc_filtered[
-        vc_filtered[vc_year_col] == selected_sankey_year
-    ]
 
     if not sankey_data.empty:
         sources = sankey_data[vc_src_col].astype(str).tolist()
@@ -223,19 +215,21 @@ if not vc_filtered.empty:
             ]
         )
         sankey_fig.update_layout(
-            title_text=f"AI VC Investment Flows ({selected_sankey_year})",
+            title_text="Total AI VC Investment Flows (Source to Destination)",
             font_size=11,
-            height=500,
+            height=600,
         )
         st.plotly_chart(sankey_fig, use_container_width=True)
+    else:
+        st.info("No VC flow records found.")
 else:
-    st.info("Select focus countries in the sidebar to display the Sankey diagram.")
+    st.warning("Required columns missing in VC_Flow dataset.")
 
 
-# --- PLOT 3: DIVERGING HORIZONTAL BAR CHART ---
-st.header("3. Comparative Governance Benchmarking (Diverging)")
+# --- PLOT 3: DIVERGING HORIZONTAL BAR CHART (ALL COUNTRIES VISIBLE) ---
+st.header("3. Comparative Governance Benchmarking (All Countries)")
 st.markdown(
-    "Diverging bar chart centered at the OECD average benchmark. Scores above average extend rightward (green); scores below average extend leftward (orange)."
+    "Diverging bar chart displaying all countries. United States, Germany, and Korea are highlighted in gold."
 )
 
 latest_yr = df_gov[gov_year_col].max()
@@ -259,12 +253,11 @@ bar_df = (
 bar_df["Divergence"] = bar_df[gov_val_col] - oecd_avg_val
 bar_df = bar_df.sort_values(by="Divergence", ascending=True)
 
-# Assign custom color scale
 colors = []
 for _, row in bar_df.iterrows():
     c = row[gov_region_col]
     if c in focus_countries:
-        colors.append("royalblue" if c == "United States" else "gold" if c == "Germany" else "crimson")
+        colors.append("gold")  # Uniform highlight color for USA, Germany, Korea
     else:
         colors.append("mediumseagreen" if row["Divergence"] >= 0 else "coral")
 
@@ -282,8 +275,8 @@ bar_fig.add_trace(
 bar_fig.update_layout(
     title=f"Regulatory Governance Divergence from OECD Average ({oecd_avg_val:.2f}) - {int(latest_yr)}",
     xaxis_title="Divergence from OECD Average Score",
-    yaxis_title="Country",
-    height=750,
+    yaxis=dict(title="Country", tickfont=dict(size=9)),  # Reduced font to fit all countries
+    height=900,  Expanded height for full visibility
     shapes=[
         dict(
             type="line",
@@ -301,7 +294,7 @@ st.plotly_chart(bar_fig, use_container_width=True)
 # --- PLOTS 4, 5, & 6: COUNTRY DEEP-DIVE TIME SERIES ---
 st.header("4. Country Deep-Dives: VC Investment vs. Regulatory Governance")
 st.markdown(
-    "Time-series deep-dives corresponding to your reference drawing. Dual Y-axes track investment flow ($M USD) against regulatory score (0–4)."
+    "Dual-axis time series tracking Investment ($M USD) on primary Y-axis, and Regulatory Score / OECD Average (0–3 range) on secondary Y-axis."
 )
 
 for country in selected_deepdive_countries:
@@ -340,7 +333,7 @@ for country in selected_deepdive_countries:
     if not merged_ts.empty:
         fig_dual = make_subplots(specs=[[{"secondary_y": True}]])
 
-        # Red Line: Investment Flow (Left Y-Axis)
+        # Investment Line Graph (Primary Y-Axis)
         fig_dual.add_trace(
             go.Scatter(
                 x=merged_ts["Year"],
@@ -352,7 +345,7 @@ for country in selected_deepdive_countries:
             secondary_y=False,
         )
 
-        # Blue Line: Country Regulatory Governance Score (Right Y-Axis)
+        # Country Governance Score (Secondary Y-Axis, range 0-3)
         fig_dual.add_trace(
             go.Scatter(
                 x=merged_ts["Year"],
@@ -364,7 +357,7 @@ for country in selected_deepdive_countries:
             secondary_y=True,
         )
 
-        # Gray Dashed Line: OECD Average Score (Right Y-Axis)
+        # OECD Average Score (Secondary Y-Axis, range 0-3)
         fig_dual.add_trace(
             go.Scatter(
                 x=merged_ts["Year"],
@@ -385,15 +378,15 @@ for country in selected_deepdive_countries:
             title_text="Investment (in millions USD)", secondary_y=False
         )
         fig_dual.update_yaxes(
-            title_text="Regulatory Governance Score",
+            title_text="Regulatory Governance Score (0 - 3)",
             secondary_y=True,
-            range=[0, 4],
+            range=[0, 3],
         )
         st.plotly_chart(fig_dual, use_container_width=True)
 
 
-# --- PLOT 5: COMPARATIVE HEATMAPS (TOP 20 PERFORMERS) ---
-st.header("5. Comparative Heatmaps (Top 20 Performers, Excluding China)")
+# --- PLOT 5 & 6: HEATMAPS ---
+st.header("5. Comparative Heatmaps")
 
 col_hm1, col_hm2 = st.columns(2)
 
@@ -404,31 +397,29 @@ with col_hm1:
     ]
     piv_vc = (
         vc_no_china.pivot_table(
-            index=vc_dest_col,
-            columns=vc_year_col,
+            index=vc_year_col,
+            columns=vc_dest_col,
             values=vc_inv_col,
             aggfunc="sum",
         )
-        .pct_change(axis=1)
+        .pct_change(axis=0)
         * 100
     )
 
     if not piv_vc.empty:
-        piv_vc["mean_pct"] = piv_vc.mean(axis=1)
-        top20_vc = piv_vc.sort_values(by="mean_pct", ascending=False).head(20)
-        top20_vc = top20_vc.drop(columns="mean_pct")
-
+        piv_vc = piv_vc.round(2)  # Round to 2 decimal places
         fig_hm1 = px.imshow(
-            top20_vc,
-            labels=dict(x="Year", y="Country", color="YoY % Change"),
-            title="Top 20 VC YoY % Change Heatmap",
+            piv_vc,
+            labels=dict(x="Country", y="Year", color="YoY % Change (%)"),
+            title="VC Flow YoY % Change (Years on Y, Countries on X)",
             color_continuous_scale="RdBu",
+            text_auto=True,  # Display rounded percentages inside cells
             aspect="auto",
         )
         st.plotly_chart(fig_hm1, use_container_width=True)
 
 with col_hm2:
-    st.subheader("2024 Regulatory Governance Heatmap")
+    st.subheader("2024 Regulatory Governance (Score >= 0.75)")
     gov_2024 = df_gov[
         (df_gov[gov_year_col] == 2024)
         & (
@@ -437,21 +428,33 @@ with col_hm2:
             )
         )
     ]
-    gov_2024_piv = (
+    gov_2024_filtered = (
         gov_2024.groupby(gov_region_col, as_index=False)[gov_val_col]
         .mean()
-        .sort_values(by=gov_val_col, ascending=False)
-        .head(20)
+        .query(f"{gov_val_col} >= 0.75")
+        .sort_values(by=gov_val_col, ascending=True)
     )
 
-    if not gov_2024_piv.empty:
-        matrix_data = gov_2024_piv.set_index(gov_region_col)[[gov_val_col]]
+    if not gov_2024_filtered.empty:
+        colors_hm2 = [
+            "gold" if c in focus_countries else "mediumseagreen"
+            for c in gov_2024_filtered[gov_region_col]
+        ]
 
-        fig_hm2 = px.imshow(
-            matrix_data,
-            labels=dict(x="Metric", y="Country", color="Score (0-4)"),
-            title="Top 20 Regulatory Governance Heatmap (2024)",
-            color_continuous_scale="YlGnBu",
-            aspect="auto",
+        bar_hm2 = go.Figure(
+            go.Bar(
+                x=gov_2024_filtered[gov_val_col],
+                y=gov_2024_filtered[gov_region_col],
+                orientation="h",
+                text=gov_2024_filtered[gov_val_col].apply(lambda x: f"{x:.2f}"),
+                textposition="outside",
+                marker_color=colors_hm2,
+            )
         )
-        st.plotly_chart(fig_hm2, use_container_width=True)
+        bar_hm2.update_layout(
+            title="2024 Regulatory Governance (Scores >= 0.75)",
+            xaxis_title="Score",
+            yaxis=dict(title="Country", tickfont=dict(size=9)),
+            height=600,
+        )
+        st.plotly_chart(bar_hm2, use_container_width=True)
