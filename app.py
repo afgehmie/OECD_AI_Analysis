@@ -175,7 +175,7 @@ if map_mode == "Animate Both (Loop)":
 # --- PLOT 2: CROSS-BORDER AI VENTURE CAPITAL FLOW (2021-2026) ---
 st.header("Cross-border AI Venture Capital Flow (2021-2026)")
 st.markdown(
-    "Interactive Sankey diagram tracking cross-border VC investments with year selection slider positioned below."
+    "Interactive Sankey diagram tracking cross-border VC investments from source countries (left) to destination countries (right) with the year scale at the bottom."
 )
 
 if all(
@@ -255,7 +255,7 @@ else:
 # --- PLOT 3: DIVERGING HORIZONTAL BAR CHART ---
 st.header("3. Comparative Governance Benchmarking (All Countries)")
 st.markdown(
-    "Diverging bar chart displaying all countries. United States, Germany, and Korea are highlighted in light accent."
+    "Diverging bar chart displaying all countries. United States, Germany, and Korea are highlighted with light accent."
 )
 
 latest_yr = df_gov[gov_year_col].max()
@@ -329,7 +329,6 @@ for country in selected_deepdive_countries:
     sub_col1, sub_col2 = st.columns(2)
 
     with sub_col1:
-        # Correctly aggregate column E (Investment) from VC_Flow dataset grouped by year
         inv_ts = (
             df_vc[df_vc[vc_dest_col] == country]
             .groupby(vc_year_col, as_index=False)[vc_inv_col]
