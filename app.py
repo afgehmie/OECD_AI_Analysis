@@ -52,44 +52,99 @@ target_countries = st.sidebar.multiselect(
     default=["United States", "Germany", "Korea"],
 )
 
-# --- SECTION 1: ANIMATED GEOGRAPHICAL MAP ---
-st.header("1. Animated Geographical Map: Regulatory Governance (2021 & 2024)")
+# --- SECTION 1: REGULATORY GOVERNANCE SCORE MAP ---
+st.header("Regulatory Governance Score")
 st.markdown(
-    "Comparing OECD country performance scores across available survey benchmarks (2021 and 2024). Focus countries are highlighted."
+    "Interactive choropleth map showing OECD regulatory governance performance. Use the controls below to toggle years, auto-play the animation, or highlight specific countries."
 )
 
-# Data aggregation for map: average score per region/country per year if multiple measures exist
-if "Region" in df_gov.columns and "Year" in df_gov.columns and "VALUE (0 - 4)" in df_gov.columns:
+if (
+    "Region" in df_gov.columns
+    and "Year" in df_gov.columns
+    and "VALUE (0 - 4)" in df_gov.columns
+):
     map_df = (
         df_gov.groupby(["Region", "Year"], as_index=False)["VALUE (0 - 4)"]
         .mean()
         .rename(columns={"Region": "Country", "VALUE (0 - 4)": "Score"})
     )
 
-    # Create a highlight column for visualization
-    map_df["Highlight Group"] = map_df["Country"].apply(
-        lambda x: x if x in target_countries else "Other Countries"
+    # Sidebar or inline controls for map
+    col_ctrl1, col_ctrl2 = st.columns(2)
+    with col_ctrl1:
+        map_year_mode = st.radio(
+            "Select Year View", options=["2021", "2024", "Animate Both"], horizontal=True
+        )
+    with col_ctrl2:
+        highlight_map_countries = st.multiselect(
+            "Highlight Countries on Map",
+            options=["United States", "Germany", "Korea"],
+            default=["United States", "Germany", "Korea"],
+        )
+
+    # Filter or structure data based on mode
+    if map_year_mode != "Animate Both":
+        filtered_map_df = map_df[map_df["Year"] == int(map_year_mode)].copy()
+    else:
+        filtered_map_df = map_df.copy()
+
+    # Assign display colors/categories for highlighting
+    filtered_map_df["Display Score"] = filtered_map_df.apply(
+        lambda row: row["Score"]
+        if row["Country"] in highlight_map_countries
+        else np.nan,
+        axis=1,
     )
 
-    # Plotly Choropleth map with animation frame on Year
-    fig_map = px.choropleth(
-        map_df,
-        locations="Country",
-        locationmode="country names",
-        color="Score",
-        animation_frame="Year",
-        hover_name="Country",
-        color_continuous_scale="Blues",
-        range_color=[0, 4],
-        title="OECD Regulatory Governance Score Evolution",
+    # Plotly Map with Diverging Color Scale (RdYlGn: Red to Yellow to Green)
+    if map_year_mode == "Animate Both":
+        fig_map = px.choropleth(
+            filtered_map_df,
+            locations="Country",
+            locationmode="country names",
+            color="Score",
+            animation_frame="Year",
+            hover_name="Country",
+            color_continuous_scale="RdYlGn",
+            range_color=[0, 4],
+            title="OECD Regulatory Governance Score Evolution (2021 vs 2024)",
+        )
+        # Configure play/pause transition speed for smooth auto-loop
+        fig_map.layout.updatemenus[0].buttons[0].args[1]["frame"]["duration"] = (
+            2000  # 2 seconds per frame
+        )
+        fig_map.layout.updatemenus[0].buttons[0].args[1]["transition"][
+            "duration"
+        ] = 800
+    else:
+        fig_map = px.choropleth(
+            filtered_map_df,
+            locations="Country",
+            locationmode="country names",
+            color="Score",
+            hover_name="Country",
+            color_continuous_scale="RdYlGn",
+            range_color=[0, 4],
+            title=f"Regulatory Governance Scores ({map_year_mode})",
+        )
+
+    # Enlarge and improve map framing/projection for better clarity
+    fig_map.update_layout(
+        geo=dict(
+            showframe=False,
+            showcoastlines=True,
+            projection_type="winkel tripel",  # Provides a balanced, clear global view
+            center=dict(lat=45, lon=10),
+            zoom=1.8,
+        ),
+        height=600,
+        margin=dict(l=0, r=0, t=50, b=0),
     )
-    fig_map.update_layout(geo=dict(showframe=False, projection_type="natural earth"))
     st.plotly_chart(fig_map, use_container_width=True)
 else:
     st.warning(
         "Expected columns ('Region', 'Year', 'VALUE (0 - 4)') not found in Regulatory Governance dataset."
     )
-
 
 # --- SECTION 2: ANIMATED SANKEY DIAGRAM ---
 st.header(
