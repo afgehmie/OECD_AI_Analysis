@@ -53,7 +53,7 @@ target_countries = st.sidebar.multiselect(
 # --- SECTION 1: REGULATORY GOVERNANCE SCORE MAP ---
 st.header("Regulatory Governance Score")
 st.markdown(
-    "Interactive choropleth map displaying OECD regulatory governance performance. Colors are dynamically scaled to highlight relative performance (Green = Above Average, Orange/Red = Below Average). Unselected countries appear in muted gray."
+    "Interactive choropleth map displaying OECD regulatory governance performance with country labels and scores. Colors dynamically scale to highlight relative performance (Green = Above Average, Orange/Red = Below Average). Unselected countries appear in muted gray."
 )
 
 if all(c in df_gov.columns for c in ["Region", "Year", "VALUE (0 - 4)"]):
@@ -84,7 +84,13 @@ if all(c in df_gov.columns for c in ["Region", "Year", "VALUE (0 - 4)"]):
         axis=1
     )
 
-    # Calculate dynamic min, max, and mean based on data distribution so contrast is visible
+    # Formatted display label containing Country Name and Score
+    map_df["LabelText"] = map_df.apply(
+        lambda row: f"{row['Country']}: {row['Score']:.2f}" if row["Country"] in highlight_map_countries else "",
+        axis=1
+    )
+
+    # Dynamic data bounds to expand color contrast
     data_min = float(map_df["Score"].min())
     data_max = float(map_df["Score"].max())
     data_mean = float(map_df["Score"].mean())
@@ -99,7 +105,7 @@ if all(c in df_gov.columns for c in ["Region", "Year", "VALUE (0 - 4)"]):
             locationmode="country names",
             color="Plot Score",
             hover_name="Country",
-            hover_data={"Score": True, "Plot Score": False},
+            hover_data={"Score": ":.2f", "Plot Score": False},
             color_continuous_scale="RdYlGn",
             color_continuous_midpoint=data_mean,
             range_color=[data_min, data_max],
@@ -113,17 +119,19 @@ if all(c in df_gov.columns for c in ["Region", "Year", "VALUE (0 - 4)"]):
             color="Plot Score",
             animation_frame="Year",
             hover_name="Country",
-            hover_data={"Score": True, "Plot Score": False},
+            hover_data={"Score": ":.2f", "Plot Score": False},
             color_continuous_scale="RdYlGn",
             color_continuous_midpoint=data_mean,
             range_color=[data_min, data_max],
             title="OECD Regulatory Governance Score Evolution (2021 vs 2024 Loop)",
         )
-        # Configure automatic loop & frame transition speed
+        # Configure automatic loop play settings
         if len(fig_map.layout.updatemenus) > 0:
             fig_map.layout.updatemenus[0].buttons[0].args[1]["frame"]["duration"] = 2500
             fig_map.layout.updatemenus[0].buttons[0].args[1]["transition"]["duration"] = 1000
             fig_map.layout.updatemenus[0].buttons[0].args[1]["transition"]["easing"] = "cubic-in-out"
+            fig_map.layout.updatemenus[0].buttons[0].args[1]["fromcurrent"] = True
+            fig_map.layout.updatemenus[0].buttons[0].args[1]["mode"] = "immediate"
 
     fig_map.update_layout(
         geo=dict(
