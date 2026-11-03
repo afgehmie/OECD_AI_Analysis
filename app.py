@@ -275,7 +275,7 @@ bar_fig.update_layout(
     title=f"Regulatory Governance Divergence from OECD Average ({oecd_avg_val:.2f}) - {int(latest_yr)}",
     xaxis_title="Divergence from OECD Average Score",
     yaxis=dict(title="Country", tickfont=dict(size=9)),
-    height=900,  # Expanded height for full visibility
+    height=900,
     shapes=[
         dict(
             type="line",
@@ -427,12 +427,14 @@ with col_hm2:
             )
         )
     ]
+    # Fixed using safe boolean indexing instead of .query()
     gov_2024_filtered = (
         gov_2024.groupby(gov_region_col, as_index=False)[gov_val_col]
         .mean()
-        .query(f"{gov_val_col} >= 0.75")
-        .sort_values(by=gov_val_col, ascending=True)
     )
+    gov_2024_filtered = gov_2024_filtered[
+        gov_2024_filtered[gov_val_col] >= 0.75
+    ].sort_values(by=gov_val_col, ascending=True)
 
     if not gov_2024_filtered.empty:
         colors_hm2 = [
