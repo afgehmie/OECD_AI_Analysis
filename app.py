@@ -214,11 +214,11 @@ if all(
         node_colors = []
         for n in all_nodes:
             if "United States" in n:
-                node_colors.append("#1f77b4")  # Blue
+                node_colors.append("#1f77b4")
             elif "Germany" in n:
-                node_colors.append("#ff7f0e")  # Orange
+                node_colors.append("#ff7f0e")
             elif "Korea" in n:
-                node_colors.append("#2ca02c")  # Green
+                node_colors.append("#2ca02c")
             else:
                 node_colors.append("#aec7e8")
 
@@ -329,6 +329,7 @@ for country in selected_deepdive_countries:
     sub_col1, sub_col2 = st.columns(2)
 
     with sub_col1:
+        # Correctly aggregate column E (Investment) from VC_Flow dataset grouped by year
         inv_ts = (
             df_vc[df_vc[vc_dest_col] == country]
             .groupby(vc_year_col, as_index=False)[vc_inv_col]
@@ -371,7 +372,6 @@ for country in selected_deepdive_countries:
             labels={gov_val_col: "Governance Score (0–4)", "Year": "Year"},
             color_discrete_map={country: "royalblue", "OECD Average": "gray"}
         )
-        # Fixed update_yaxes call
         fig_bars.update_yaxes(range=[0, 4])
         fig_bars.update_layout(height=400)
         st.plotly_chart(fig_bars, use_container_width=True)
@@ -383,7 +383,7 @@ st.header("5. Comparative Heatmaps")
 col_hm1, col_hm2 = st.columns(2)
 
 with col_hm1:
-    st.markdown("<h3 style='font-size:18px;'>VC Flow YoY % Change Heatmap</h3>", unsafe_allow_html=True)
+    st.markdown("### VC Flow YoY % Change Heatmap")
     vc_no_china = df_vc[
         ~df_vc[vc_dest_col].str.contains("China", case=False, na=False)
     ]
@@ -419,7 +419,7 @@ with col_hm1:
         st.plotly_chart(fig_hm1, use_container_width=True)
 
 with col_hm2:
-    st.markdown("<h3 style='font-size:18px;'>2024 Regulatory Governance (Score ≥ 0.75)</h3>", unsafe_allow_html=True)
+    st.markdown("### 2024 Regulatory Governance (Score ≥ 0.75)")
     gov_2024 = df_gov[
         (df_gov[gov_year_col] == 2024)
         & (
