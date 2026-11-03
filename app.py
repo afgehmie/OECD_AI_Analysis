@@ -213,11 +213,11 @@ if all(
 
         node_colors = []
         for n in all_nodes:
-            if n == "United States":
+            if n == "United States" or n == "USA":
                 node_colors.append("#1f77b4")  # Blue
-            elif n == "Germany":
+            elif n == "Germany" or n == "DEU":
                 node_colors.append("#ff7f0e")  # Orange
-            elif n == "Korea":
+            elif n == "Korea" or n == "KOR":
                 node_colors.append("#2ca02c")  # Green
             else:
                 node_colors.append("#aec7e8")  # Muted gray-blue
@@ -382,7 +382,7 @@ st.header("5. Comparative Heatmaps")
 col_hm1, col_hm2 = st.columns(2)
 
 with col_hm1:
-    st.markdown("### VC Flow YoY % Change Heatmap")
+    st.subheader("VC Flow YoY % Change Heatmap")
     vc_no_china = df_vc[
         ~df_vc[vc_dest_col].str.contains("China", case=False, na=False)
     ]
@@ -418,7 +418,7 @@ with col_hm1:
         st.plotly_chart(fig_hm1, use_container_width=True)
 
 with col_hm2:
-    st.markdown("### 2024 Regulatory Governance (Score ≥ 0.75)")
+    st.subheader("2024 Regulatory Governance (Score ≥ 0.75)")
     gov_2024 = df_gov[
         (df_gov[gov_year_col] == 2024)
         & (
