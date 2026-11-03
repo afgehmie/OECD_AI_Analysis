@@ -57,7 +57,7 @@ gov_val_col = next(
     df_gov.columns[3] if len(df_gov.columns) > 3 else df_gov.columns[0],
 )
 
-# Explicitly lock down VC_Flow columns based on user dataset structure (Col B: Destination, Col E: Investment, Col F: Year)
+# Explicitly lock down VC_Flow columns (Col B: Destination, Col E: Investment, Col F: Year)
 vc_dest_col = df_vc.columns[1] if len(df_vc.columns) > 1 else df_vc.columns[0]
 vc_src_col = df_vc.columns[3] if len(df_vc.columns) > 3 else df_vc.columns[2]
 vc_inv_col = df_vc.columns[4] if len(df_vc.columns) > 4 else df_vc.columns[4]
@@ -190,15 +190,13 @@ if all(
     min_yr = int(df_vc[vc_year_col].min())
     max_yr = int(df_vc[vc_year_col].max())
     
-    # Sankey render first
-    sankey_placeholder = st.empty()
-    
-    # Year slider placed cleanly at the bottom as requested
+    # Year slider placed cleanly right below the chart header/description as requested
     selected_sankey_year = st.slider(
         "Select Year for Sankey Flow",
         min_yr,
         max_yr,
         2021,
+        key="sankey_slider"
     )
     
     sankey_data = df_vc[df_vc[vc_year_col] == selected_sankey_year].groupby(
@@ -224,13 +222,13 @@ if all(
         node_colors = []
         for n in all_nodes:
             if n == "United States":
-                node_colors.append("#1f77b4")  # Blue
+                node_colors.append("#1f77b4")
             elif n == "Germany":
-                node_colors.append("#ff7f0e")  # Orange
+                node_colors.append("#ff7f0e")
             elif n == "Korea":
-                node_colors.append("#2ca02c")  # Green
+                node_colors.append("#2ca02c")
             else:
-                node_colors.append("#aec7e8")  # Muted gray-blue
+                node_colors.append("#aec7e8")
 
         sankey_fig = go.Figure(
             data=[
@@ -325,22 +323,22 @@ bar_fig.update_layout(
         )
     ],
 )
-st.plotly_chart(bar_bar_fig := bar_fig, use_container_width=True)
+st.plotly_chart(bar_fig, use_container_width=True)
 
 
 # --- PLOTS 4, 5, & 6: SIDE-BY-SIDE COUNTRY DEEP-DIVE PANELS ---
 st.header("4. Country Deep-Dives: Investment Trend & Governance Comparison")
 st.markdown(
-    "Side-by-side panels: Left panel shows investment trend (2021–2026); right panel displays double-bar comparative governance performance (2021 vs 2024)."
+    "Side-by-side panels: Left panel shows animated investment trend (2021–2026) with running blue point; right panel displays labeled double-bar comparative governance performance."
 )
 
 for country in selected_deepdive_countries:
     st.subheader(f"Deep-Dive Panel: {country}")
     
-    sub_col1, sub_col2 = st.columns(2)
+    sub_col1, sub_col2 = sub_col_2 = st.columns(2)
 
     with sub_col1:
-        # Left Panel: Investment Trend from column E grouped by year
+        # Left Panel: Animated Investment Trend with Big Blue Point and Value Labels
         inv_ts = (
             df_vc[df_vc[vc_dest_col].astype(str).str.strip().str.lower() == country.strip().lower()]
             .groupby(vc_year_col, as_index=False)[vc_inv_col]
@@ -348,24 +346,117 @@ for country in selected_deepdive_countries:
             .rename(columns={vc_year_col: "Year", vc_inv_col: "Investment"})
         )
         inv_ts["Year"] = inv_ts["Year"].astype(int)
-        
-        fig_inv = px.line(
-            inv_ts,
-            x="Year",
-            y="Investment",
-            markers=True,
-            title=f"{country}: Investment Trend ($M USD)",
-            labels={"Investment": "Investment ($M USD)", "Year": "Year"}
-        )
-        fig_inv.update_traces(line=dict(color="crimson", width=3))
-        fig_inv.update_layout(
-            height=400,
-            xaxis=dict(tickmode="linear", dtick=1)
-        )
-        st.plotly_chart(fig_inv, use_container_width=True)
+        inv_ts["Frame_Sort"] = inv_ts["Year"]
+
+        if not inv_ts.empty:
+            fig_inv = go.Figure()
+            
+            # Add base trendline with text labels for each year
+            fig_inv.add_trace(
+                go.Scatter(
+                    x=inv_ts["Year"],
+                    y=inv_ts["Investment"],
+                    mode="lines+markers+text",
+                    text=inv_ts["Investment"].apply(lambda v: f"${v:,.1f}M" if pd.notnull(v) else ""),
+                    textposition="top center",
+                    line=dict(color="crimson", width=3),
+                    marker=dict(size=8),
+                    name="Investment Trend"
+                )
+            )
+
+            # Build frames for animated big blue point moving year by year
+            frames = []
+            years_sorted = sorted(inv_ts["Year"].unique())
+            for yr in years_sorted:
+                subset = inv_ts[inv_ts["Year"] <= yr]
+                current_pt = inv_ts[inv_ts["Year"] == yr]
+                
+                frame_data = [
+                    go.Scatter(
+                        x=inv_ts["Year"],
+                        y=inv_ts["Investment"],
+                        mode="lines+markers+text",
+                        text=inv_ts["Investment"].apply(lambda v: f"${v:,.1f}M" if pd.notnull(v) else ""),
+                        textposition="top center",
+                        line=dict(color="crimson", width=3),
+                    ),
+                    go.Scatter(
+                        x=current_pt["Year"],
+                        y=current_pt["Investment"],
+                        mode="markers",
+                        marker=dict(size=18, color="blue", symbol="circle"),
+                        name="Moving Point"
+                    )
+                ]
+                frames.append(go.Frame(data=frame_data, name=str(yr)))
+
+            fig_inv.frames = frames
+
+            # Add Play/Pause animation buttons
+            fig_inv.update_layout(
+                title=f"{country}: Animated Investment Trend ($M USD)",
+                xaxis=dict(title="Year", tickmode="linear", dtick=1),
+                yaxis=dict(title="Investment ($M USD)"),
+                height=400,
+                updatemenus=[
+                    dict(
+                        type="buttons",
+                        showactive=False,
+                        buttons=[
+                            dict(
+                                label="Play",
+                                method="animate",
+                                args=[
+                                    None,
+                                    dict(
+                                        frame=dict(duration=1000, redraw=True),
+                                        fromcurrent=True,
+                                        transition=dict(duration=300),
+                                    ),
+                                ],
+                            ),
+                            dict(
+                                label="Pause",
+                                method="animate",
+                                args=[
+                                    [None],
+                                    dict(
+                                        frame=dict(duration=0, redraw=False),
+                                        mode="immediate",
+                                        transition=dict(duration=0),
+                                    ),
+                                ],
+                            ),
+                        ],
+                    )
+                ],
+                sliders=[
+                    dict(
+                        steps=[
+                            dict(
+                                method="animate",
+                                args=[[str(yr)], dict(mode="immediate", frame=dict(duration=300, redraw=True))],
+                                label=str(yr),
+                            )
+                            for yr in years_sorted
+                        ],
+                        active=0,
+                        transition=dict(duration=300),
+                        x=0.1,
+                        len=0.9,
+                        xanchor="left",
+                        y=-0.2,
+                        yanchor="top",
+                    )
+                ]
+            )
+            st.plotly_chart(fig_inv, use_container_width=True)
+        else:
+            st.info(f"No investment data found for {country}.")
 
     with sub_col2:
-        # Right Panel: Double-Bar Comparative Governance
+        # Right Panel: Double-Bar Comparative Governance with explicit value text labels on bars
         gov_comp = df_gov[
             (df_gov[gov_region_col].astype(str).str.strip().str.lower() == country.strip().lower()) |
             (df_gov[gov_region_col].str.contains("OECD average", case=False, na=False))
@@ -385,11 +476,13 @@ for country in selected_deepdive_countries:
             y=gov_val_col,
             color="Entity",
             barmode="group",
+            text=gov_val_col,
             title=f"{country} vs. OECD Average Governance (0–4)",
             labels={gov_val_col: "Governance Score (0–4)", "Year": "Year"},
             color_discrete_map={country: "royalblue", "OECD Average": "gray"}
         )
-        fig_bars.update_yaxes(range=[0, 4])
+        fig_bars.update_traces(texttemplate='%{text:.2f}', textposition='outside')
+        fig_bars.update_yaxes(range=[0, 4.5])
         fig_bars.update_layout(
             height=400,
             xaxis=dict(tickmode="linear", dtick=3)
