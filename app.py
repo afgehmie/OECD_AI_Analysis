@@ -187,20 +187,27 @@ if all(
     for c in [vc_src_col, vc_dest_col, vc_inv_col, vc_year_col]
 ):
     df_vc[vc_year_col] = df_vc[vc_year_col].astype(int)
-    available_years = sorted(df_vc[vc_year_col].unique().tolist())
+    available_sankey_years = sorted(df_vc[vc_year_col].unique().tolist())
     
-    # Placeholder for Sankey chart first
     sankey_chart_placeholder = st.empty()
     
-    # Using st.select_slider so every year marker (2021 to 2026) is explicitly visible along the slider
-    selected_sankey_year = st.select_slider(
-        "Select Year for Sankey Flow",
-        options=available_years,
-        value=available_years[0],
-        key="sankey_select_slider"
+    # Sankey View Mode (Select specific year or continuous loop animation)
+    sankey_options = [str(y) for y in available_sankey_years] + ["Animate (Loop 2021-2026)"]
+    sankey_mode = st.radio(
+        "Select Year or Animate Sankey Flow",
+        options=sankey_options,
+        horizontal=True,
+        key="sankey_anim_radio"
     )
-    
-    sankey_data = df_vc[df_vc[vc_year_col] == selected_sankey_year].groupby(
+
+    if sankey_mode == "Animate (Loop 2021-2026)":
+        if "sankey_loop_idx" not in st.session_state:
+            st.session_state.sankey_loop_idx = 0
+        current_sankey_year = available_sankey_years[st.session_state.sankey_loop_idx]
+    else:
+        current_sankey_year = int(sankey_mode)
+
+    sankey_data = df_vc[df_vc[vc_year_col] == current_sankey_year].groupby(
         [vc_src_col, vc_dest_col], as_index=False
     )[vc_inv_col].sum()
 
@@ -249,13 +256,18 @@ if all(
             ]
         )
         sankey_fig.update_layout(
-            title_text=f"Cross-border AI VC Flow ({selected_sankey_year})",
+            title_text=f"Cross-border AI VC Flow ({current_sankey_year})",
             font_size=11,
             height=600,
         )
         sankey_chart_placeholder.plotly_chart(sankey_fig, use_container_width=True)
     else:
         sankey_chart_placeholder.info("No VC records available for the selected year.")
+
+    if sankey_mode == "Animate (Loop 2021-2026)":
+        time.sleep(2.0)
+        st.session_state.sankey_loop_idx = (st.session_state.sankey_loop_idx + 1) % len(available_sankey_years)
+        st.rerun()
 else:
     st.warning("Required columns missing in VC_Flow dataset.")
 
@@ -329,7 +341,7 @@ st.plotly_chart(bar_fig, use_container_width=True)
 # --- PLOTS 4, 5, & 6: SIDE-BY-SIDE COUNTRY DEEP-DIVE PANELS ---
 st.header("4. Country Deep-Dives: Investment Trend & Governance Comparison")
 st.markdown(
-    "Side-by-side panels: Left panel shows interactive investment trend with moving blue point; right panel displays labeled double-bar comparative governance performance."
+    "Side-by-side panels: Left panel shows interactive investment trend with moving blue point and continuous loop animation option; right panel displays labeled double-bar comparative governance performance."
 )
 
 for country in selected_deepdive_countries:
@@ -349,14 +361,23 @@ for country in selected_deepdive_countries:
         if not inv_ts.empty:
             trend_years = sorted(inv_ts["Year"].unique().tolist())
             
-            # Interactive Streamlit select_slider right above the trendline to smoothly animate/step the big blue point along years
-            active_trend_year = st.select_slider(
-                f"Select Year for {country} Investment Trend",
-                options=trend_years,
-                value=trend_years[-1],
-                key=f"trend_slider_{country}"
+            # Animation / Year Selection radio option matching Plot 1 style
+            trend_options = [str(y) for y in trend_years] + ["Animate (Loop 2021-2026)"]
+            trend_mode = st.radio(
+                f"Select Year or Animate {country} Investment",
+                options=trend_options,
+                horizontal=True,
+                key=f"trend_anim_{country}"
             )
-            
+
+            session_key = f"trend_loop_idx_{country}"
+            if trend_mode == "Animate (Loop 2021-2026)":
+                if session_key not in st.session_state:
+                    st.session_state[session_key] = 0
+                active_trend_year = trend_years[st.session_state[session_key]]
+            else:
+                active_trend_year = int(trend_mode)
+
             fig_inv = go.Figure()
             
             # Base trendline with all text labels
@@ -373,7 +394,7 @@ for country in selected_deepdive_countries:
                 )
             )
 
-            # Highlighted big blue point at the selected year moving along the trendline
+            # Big blue point moving from year to year along the trendline
             active_point = inv_ts[inv_ts["Year"] == active_trend_year]
             if not active_point.empty:
                 fig_inv.add_trace(
@@ -381,19 +402,24 @@ for country in selected_deepdive_countries:
                         x=active_point["Year"],
                         y=active_point["Investment"],
                         mode="markers",
-                        marker=dict(size=20, color="blue", symbol="circle", line=dict(color="white", width=2)),
+                        marker=dict(size=22, color="blue", symbol="circle", line=dict(color="white", width=2)),
                         name=f"Active Year ({active_trend_year})"
                     )
                 )
 
             fig_inv.update_layout(
-                title=f"{country}: Investment Trend ($M USD) [Active: {active_trend_year}]",
+                title=f"{country}: Investment Trend ($M USD) [Year: {active_trend_year}]",
                 xaxis=dict(title="Year", tickmode="linear", dtick=1),
                 yaxis=dict(title="Investment ($M USD)"),
                 height=400,
                 margin=dict(t=50)
             )
             st.plotly_chart(fig_inv, use_container_width=True)
+
+            if trend_mode == "Animate (Loop 2021-2026)":
+                time.sleep(2.0)
+                st.session_state[session_key] = (st.session_state[session_key] + 1) % len(trend_years)
+                st.rerun()
         else:
             st.info(f"No investment data found for {country}.")
 
