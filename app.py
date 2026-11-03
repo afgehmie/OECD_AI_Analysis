@@ -175,7 +175,7 @@ if map_mode == "Animate Both (Loop)":
 # --- PLOT 2: CROSS-BORDER AI VENTURE CAPITAL FLOW (2021-2026) ---
 st.header("Cross-border AI Venture Capital Flow (2021-2026)")
 st.markdown(
-    "Interactive Sankey diagram tracking cross-border VC investments from source countries to destination countries."
+    "Interactive Sankey diagram tracking cross-border VC investments from source countries (left) to destination countries (right)."
 )
 
 if all(
@@ -201,13 +201,20 @@ if all(
         destinations = sankey_data[vc_dest_col].astype(str).tolist()
         values = sankey_data[vc_inv_col].tolist()
 
-        all_nodes = list(set(sources + destinations))
-        node_indices = {n: i for i, n in enumerate(all_nodes)}
-        
-        # Distinct aesthetic colors for nodes
+        # Build separate source and destination node mappings to keep left/right structure clear
+        unique_sources = [f"{s} (Source)" for s in sorted(list(set(sources)))]
+        unique_dests = [f"{d} (Destination)" for d in sorted(list(set(destinations)))]
+        all_nodes = unique_sources + unique_dests
+
+        src_indices = {s: i for i, s in enumerate(unique_sources)}
+        dest_indices = {d: i + len(unique_sources) for i, d in enumerate(unique_dests)}
+
+        mapped_sources = [src_indices[f"{s} (Source)"] for s in sources]
+        mapped_destinations = [dest_indices[f"{d} (Destination)"] for d in destinations]
+
         node_colors = [
-            "#1f77b4" if node == "United States" else "#ff7f0e" if node == "Germany" else "#2ca02c" if node == "Korea" else "#aec7e8"
-            for node in all_nodes
+            "#1f77b4" if "United States" in n else "#ff7f0e" if "Germany" in n else "#2ca02c" if "Korea" in n else "#aec7e8"
+            for n in all_nodes
         ]
 
         sankey_fig = go.Figure(
@@ -221,8 +228,8 @@ if all(
                         color=node_colors,
                     ),
                     link=dict(
-                        source=[node_indices[s] for s in sources],
-                        target=[node_indices[d] for d in destinations],
+                        source=mapped_sources,
+                        target=mapped_destinations,
                         value=values,
                     ),
                 )
@@ -231,7 +238,7 @@ if all(
         sankey_fig.update_layout(
             title_text=f"Cross-border AI VC Flow ({selected_sankey_year})",
             font_size=11,
-            height=600,
+            height=650,
         )
         st.plotly_chart(sankey_fig, use_container_width=True)
     else:
@@ -308,7 +315,7 @@ st.plotly_chart(bar_fig, use_container_width=True)
 # --- PLOTS 4, 5, & 6: COUNTRY DEEP-DIVE TIME SERIES ---
 st.header("4. Country Deep-Dives: VC Investment vs. Regulatory Governance")
 st.markdown(
-    "Dual-axis time series tracking Investment ($M USD) from VC_Flow on primary Y-axis, and Country Score / OECD Average from Regulatory Governance on secondary Y-axis (0–3 range)."
+    "Dual-axis time series tracking Investment ($M USD) from VC_Flow on primary Y-axis, and Country Score / OECD Average from Regulatory Governance on secondary Y-axis (0–4 range)."
 )
 
 for country in selected_deepdive_countries:
@@ -362,7 +369,7 @@ for country in selected_deepdive_countries:
             secondary_y=False,
         )
 
-        # Country Governance Score (Secondary Y-Axis, range 0-3)
+        # Country Governance Score (Secondary Y-Axis, range 0-4)
         fig_dual.add_trace(
             go.Scatter(
                 x=merged_ts["Year"],
@@ -374,7 +381,7 @@ for country in selected_deepdive_countries:
             secondary_y=True,
         )
 
-        # OECD Average Score (Secondary Y-Axis, range 0-3)
+        # OECD Average Score (Secondary Y-Axis, range 0-4)
         fig_dual.add_trace(
             go.Scatter(
                 x=merged_ts["Year"],
@@ -395,9 +402,9 @@ for country in selected_deepdive_countries:
             title_text="Investment (in millions USD)", secondary_y=False
         )
         fig_dual.update_yaxes(
-            title_text="Regulatory Governance Score (0 - 3)",
+            title_text="Regulatory Governance Score (0 - 4)",
             secondary_y=True,
-            range=[0, 3],
+            range=[0, 4],
         )
         st.plotly_chart(fig_dual, use_container_width=True)
 
@@ -408,12 +415,12 @@ st.header("5. Comparative Heatmaps")
 col_hm1, col_hm2 = st.columns(2)
 
 with col_hm1:
-    st.subheader("VC Flow YoY % Change Heatmap (2022-2026)")
+    st.subheader("VC Flow YoY % Change Heatmap (Descending)")
     vc_no_china = df_vc[
         ~df_vc[vc_dest_col].str.contains("China", case=False, na=False)
     ]
     
-    # Pivot: Countries on Y-axis, Years on X-axis
+    # Pivot: Countries (Destination) on Y-axis, Years on X-axis (excluding base year 2021)
     piv_vc = (
         vc_no_china.pivot_table(
             index=vc_dest_col,
@@ -425,12 +432,15 @@ with col_hm1:
         * 100
     )
 
-    # Drop base year 2021 since YoY change is undefined for base year
     if 2021 in piv_vc.columns:
         piv_vc = piv_vc.drop(columns=[2021])
 
     if not piv_vc.empty:
         piv_vc = piv_vc.round(2)
+        # Sort rows in descending order based on average YoY % change so best performers sit at the top
+        piv_vc["mean_perf"] = piv_vc.mean(axis=1)
+        piv_vc = piv_vc.sort_values(by="mean_perf", ascending=False).drop(columns="mean_perf")
+
         fig_hm1 = px.imshow(
             piv_vc,
             labels=dict(x="Year", y="Country", color="YoY % Change (%)"),
@@ -439,7 +449,6 @@ with col_hm1:
             text_auto=True,
             aspect="auto",
         )
-        # Ensure square or wide cell dimensions
         fig_hm1.update_layout(height=600)
         st.plotly_chart(fig_hm1, use_container_width=True)
 
