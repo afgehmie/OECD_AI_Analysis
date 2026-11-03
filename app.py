@@ -187,18 +187,17 @@ if all(
     for c in [vc_src_col, vc_dest_col, vc_inv_col, vc_year_col]
 ):
     df_vc[vc_year_col] = df_vc[vc_year_col].astype(int)
-    min_yr = int(df_vc[vc_year_col].min())
-    max_yr = int(df_vc[vc_year_col].max())
+    available_years = sorted(df_vc[vc_year_col].unique().tolist())
     
-    # Placeholder for Sankey chart first, so slider sits strictly BELOW the chart
+    # Placeholder for Sankey chart first
     sankey_chart_placeholder = st.empty()
     
-    selected_sankey_year = st.slider(
+    # Using st.select_slider so every year marker (2021 to 2026) is explicitly visible along the slider
+    selected_sankey_year = st.select_slider(
         "Select Year for Sankey Flow",
-        min_yr,
-        max_yr,
-        2021,
-        key="sankey_slider"
+        options=available_years,
+        value=available_years[0],
+        key="sankey_select_slider"
     )
     
     sankey_data = df_vc[df_vc[vc_year_col] == selected_sankey_year].groupby(
@@ -330,7 +329,7 @@ st.plotly_chart(bar_fig, use_container_width=True)
 # --- PLOTS 4, 5, & 6: SIDE-BY-SIDE COUNTRY DEEP-DIVE PANELS ---
 st.header("4. Country Deep-Dives: Investment Trend & Governance Comparison")
 st.markdown(
-    "Side-by-side panels: Left panel shows animated investment trend (2021–2026) along the trendline; right panel displays labeled double-bar comparative governance performance."
+    "Side-by-side panels: Left panel shows interactive investment trend with moving blue point; right panel displays labeled double-bar comparative governance performance."
 )
 
 for country in selected_deepdive_countries:
@@ -348,9 +347,19 @@ for country in selected_deepdive_countries:
         inv_ts["Year"] = inv_ts["Year"].astype(int)
 
         if not inv_ts.empty:
+            trend_years = sorted(inv_ts["Year"].unique().tolist())
+            
+            # Interactive Streamlit select_slider right above the trendline to smoothly animate/step the big blue point along years
+            active_trend_year = st.select_slider(
+                f"Select Year for {country} Investment Trend",
+                options=trend_years,
+                value=trend_years[-1],
+                key=f"trend_slider_{country}"
+            )
+            
             fig_inv = go.Figure()
             
-            # Base trendline with value labels
+            # Base trendline with all text labels
             fig_inv.add_trace(
                 go.Scatter(
                     x=inv_ts["Year"],
@@ -364,76 +373,25 @@ for country in selected_deepdive_countries:
                 )
             )
 
-            # Build frames for running blue point animation along the trendline
-            frames = []
-            years_sorted = sorted(inv_ts["Year"].unique())
-            for yr in years_sorted:
-                current_pt = inv_ts[inv_ts["Year"] == yr]
-                
-                frame_data = [
+            # Highlighted big blue point at the selected year moving along the trendline
+            active_point = inv_ts[inv_ts["Year"] == active_trend_year]
+            if not active_point.empty:
+                fig_inv.add_trace(
                     go.Scatter(
-                        x=inv_ts["Year"],
-                        y=inv_ts["Investment"],
-                        mode="lines+markers+text",
-                        text=inv_ts["Investment"].apply(lambda v: f"${v:,.1f}M" if pd.notnull(v) else ""),
-                        textposition="top center",
-                        line=dict(color="crimson", width=3),
-                    ),
-                    go.Scatter(
-                        x=current_pt["Year"],
-                        y=current_pt["Investment"],
+                        x=active_point["Year"],
+                        y=active_point["Investment"],
                         mode="markers",
-                        marker=dict(size=18, color="blue", symbol="circle"),
-                        name="Moving Point"
+                        marker=dict(size=20, color="blue", symbol="circle", line=dict(color="white", width=2)),
+                        name=f"Active Year ({active_trend_year})"
                     )
-                ]
-                frames.append(go.Frame(data=frame_data, name=str(yr)))
+                )
 
-            fig_inv.frames = frames
-
-            # Position play/pause button cleanly in top-left margin so it never overlaps Y-axis label
             fig_inv.update_layout(
-                title=f"{country}: Animated Investment Trend ($M USD)",
+                title=f"{country}: Investment Trend ($M USD) [Active: {active_trend_year}]",
                 xaxis=dict(title="Year", tickmode="linear", dtick=1),
                 yaxis=dict(title="Investment ($M USD)"),
                 height=400,
-                margin=dict(t=80),
-                updatemenus=[
-                    dict(
-                        type="buttons",
-                        showactive=False,
-                        x=0.0,
-                        y=1.20,
-                        xanchor="left",
-                        yanchor="top",
-                        buttons=[
-                            dict(
-                                label="Play",
-                                method="animate",
-                                args=[
-                                    None,
-                                    dict(
-                                        frame=dict(duration=1000, redraw=True),
-                                        fromcurrent=True,
-                                        transition=dict(duration=300),
-                                    ),
-                                ],
-                            ),
-                            dict(
-                                label="Pause",
-                                method="animate",
-                                args=[
-                                    [None],
-                                    dict(
-                                        frame=dict(duration=0, redraw=False),
-                                        mode="immediate",
-                                        transition=dict(duration=0),
-                                    ),
-                                ],
-                            ),
-                        ],
-                    )
-                ]
+                margin=dict(t=50)
             )
             st.plotly_chart(fig_inv, use_container_width=True)
         else:
