@@ -8,13 +8,13 @@ import streamlit as st
 
 # --- PAGE CONFIGURATION ---
 st.set_page_config(
-    page_title="OECD AI Regulation & VC Investment Dashboard",
+    page_title="Balancing Regulation & Freedom to Foster Firms Innovation",
     page_icon="📊",
     layout="wide",
 )
 
 st.title(
-    "OECD AI Regulation & Venture Capital Investment Analysis (2021–2026)"
+    "Balancing Regulation & Freedom to Foster Firms Innovation: OECD Case Study of United States, Germany, and Korea"
 )
 st.markdown(
     "Comprehensive dashboard tracking regulatory governance benchmarks and cross-border AI-related venture capital flows."
@@ -172,20 +172,29 @@ if map_mode == "Animate Both (Loop)":
     st.rerun()
 
 
-# --- PLOT 2: AUTOMATIC SANKEY DIAGRAM ---
-st.header("2. Automated Sankey Diagram: Cross-Border AI VC Flow (2021–2026)")
+# --- PLOT 2: CROSS-BORDER AI VENTURE CAPITAL FLOW (2021-2026) ---
+st.header("Cross-border AI Venture Capital Flow (2021-2026)")
 st.markdown(
-    "Automatically displaying cross-border investment flows from source countries to destination countries across all years."
+    "Interactive Sankey diagram tracking cross-border VC investments from source countries to destination countries."
 )
 
 if all(
     c in df_vc.columns
     for c in [vc_src_col, vc_dest_col, vc_inv_col, vc_year_col]
 ):
-    sankey_data = (
-        df_vc.groupby([vc_src_col, vc_dest_col], as_index=False)[vc_inv_col]
-        .sum()
+    min_yr = int(df_vc[vc_year_col].min())
+    max_yr = int(df_vc[vc_year_col].max())
+    
+    selected_sankey_year = st.slider(
+        "Select Year for Sankey Flow",
+        min_yr,
+        max_yr,
+        2021,
     )
+    
+    sankey_data = df_vc[df_vc[vc_year_col] == selected_sankey_year].groupby(
+        [vc_src_col, vc_dest_col], as_index=False
+    )[vc_inv_col].sum()
 
     if not sankey_data.empty:
         sources = sankey_data[vc_src_col].astype(str).tolist()
@@ -194,6 +203,12 @@ if all(
 
         all_nodes = list(set(sources + destinations))
         node_indices = {n: i for i, n in enumerate(all_nodes)}
+        
+        # Distinct aesthetic colors for nodes
+        node_colors = [
+            "#1f77b4" if node == "United States" else "#ff7f0e" if node == "Germany" else "#2ca02c" if node == "Korea" else "#aec7e8"
+            for node in all_nodes
+        ]
 
         sankey_fig = go.Figure(
             data=[
@@ -203,7 +218,7 @@ if all(
                         thickness=20,
                         line=dict(color="black", width=0.5),
                         label=all_nodes,
-                        color="cornflowerblue",
+                        color=node_colors,
                     ),
                     link=dict(
                         source=[node_indices[s] for s in sources],
@@ -214,13 +229,13 @@ if all(
             ]
         )
         sankey_fig.update_layout(
-            title_text="Total AI VC Investment Flows (Source to Destination)",
+            title_text=f"Cross-border AI VC Flow ({selected_sankey_year})",
             font_size=11,
             height=600,
         )
         st.plotly_chart(sankey_fig, use_container_width=True)
     else:
-        st.info("No VC flow records found.")
+        st.info("No VC records available for the selected year.")
 else:
     st.warning("Required columns missing in VC_Flow dataset.")
 
@@ -293,12 +308,13 @@ st.plotly_chart(bar_fig, use_container_width=True)
 # --- PLOTS 4, 5, & 6: COUNTRY DEEP-DIVE TIME SERIES ---
 st.header("4. Country Deep-Dives: VC Investment vs. Regulatory Governance")
 st.markdown(
-    "Dual-axis time series tracking Investment ($M USD) on primary Y-axis, and Regulatory Score / OECD Average (0–3 range) on secondary Y-axis."
+    "Dual-axis time series tracking Investment ($M USD) from VC_Flow on primary Y-axis, and Country Score / OECD Average from Regulatory Governance on secondary Y-axis (0–3 range)."
 )
 
 for country in selected_deepdive_countries:
     st.subheader(f"Deep-Dive: {country}")
 
+    # Primary Y-axis: Investment from VC_Flow dataset
     inv_ts = (
         df_vc[df_vc[vc_dest_col] == country]
         .groupby(vc_year_col, as_index=False)[vc_inv_col]
@@ -306,6 +322,7 @@ for country in selected_deepdive_countries:
         .rename(columns={vc_year_col: "Year", vc_inv_col: "Investment"})
     )
 
+    # Secondary Y-axis: Country Governance Score from Regulatory Governance dataset
     gov_ts = (
         df_gov[df_gov[gov_region_col] == country]
         .groupby(gov_year_col, as_index=False)[gov_val_col]
@@ -313,6 +330,7 @@ for country in selected_deepdive_countries:
         .rename(columns={gov_year_col: "Year", gov_val_col: "Score"})
     )
 
+    # Secondary Y-axis: OECD Average from Regulatory Governance dataset
     oecd_ts = (
         df_gov[
             df_gov[gov_region_col].str.contains(
@@ -390,31 +408,39 @@ st.header("5. Comparative Heatmaps")
 col_hm1, col_hm2 = st.columns(2)
 
 with col_hm1:
-    st.subheader("VC Flow YoY % Change Heatmap")
+    st.subheader("VC Flow YoY % Change Heatmap (2022-2026)")
     vc_no_china = df_vc[
         ~df_vc[vc_dest_col].str.contains("China", case=False, na=False)
     ]
+    
+    # Pivot: Countries on Y-axis, Years on X-axis
     piv_vc = (
         vc_no_china.pivot_table(
-            index=vc_year_col,
-            columns=vc_dest_col,
+            index=vc_dest_col,
+            columns=vc_year_col,
             values=vc_inv_col,
             aggfunc="sum",
         )
-        .pct_change(axis=0)
+        .pct_change(axis=1)
         * 100
     )
+
+    # Drop base year 2021 since YoY change is undefined for base year
+    if 2021 in piv_vc.columns:
+        piv_vc = piv_vc.drop(columns=[2021])
 
     if not piv_vc.empty:
         piv_vc = piv_vc.round(2)
         fig_hm1 = px.imshow(
             piv_vc,
-            labels=dict(x="Country", y="Year", color="YoY % Change (%)"),
-            title="VC Flow YoY % Change (Years on Y, Countries on X)",
+            labels=dict(x="Year", y="Country", color="YoY % Change (%)"),
+            title="VC Flow YoY % Change (Countries on Y, Years on X)",
             color_continuous_scale="RdBu",
             text_auto=True,
             aspect="auto",
         )
+        # Ensure square or wide cell dimensions
+        fig_hm1.update_layout(height=600)
         st.plotly_chart(fig_hm1, use_container_width=True)
 
 with col_hm2:
@@ -427,7 +453,6 @@ with col_hm2:
             )
         )
     ]
-    # Fixed using safe boolean indexing instead of .query()
     gov_2024_filtered = (
         gov_2024.groupby(gov_region_col, as_index=False)[gov_val_col]
         .mean()
