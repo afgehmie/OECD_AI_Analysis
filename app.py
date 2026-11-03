@@ -53,7 +53,7 @@ target_countries = st.sidebar.multiselect(
 # --- SECTION 1: REGULATORY GOVERNANCE SCORE MAP ---
 st.header("Regulatory Governance Score")
 st.markdown(
-    "Interactive choropleth map displaying OECD regulatory governance performance with country labels and scores. Colors dynamically scale to highlight relative performance (Green = Above Average, Orange/Red = Below Average). Unselected countries appear in muted gray."
+    "Interactive choropleth map zoomed into North America, Europe, North Africa, and Asia. Unselected countries appear in muted gray."
 )
 
 if all(c in df_gov.columns for c in ["Region", "Year", "VALUE (0 - 4)"]):
@@ -84,13 +84,6 @@ if all(c in df_gov.columns for c in ["Region", "Year", "VALUE (0 - 4)"]):
         axis=1
     )
 
-    # Formatted display label containing Country Name and Score
-    map_df["LabelText"] = map_df.apply(
-        lambda row: f"{row['Country']}: {row['Score']:.2f}" if row["Country"] in highlight_map_countries else "",
-        axis=1
-    )
-
-    # Dynamic data bounds to expand color contrast
     data_min = float(map_df["Score"].min())
     data_max = float(map_df["Score"].max())
     data_mean = float(map_df["Score"].mean())
@@ -125,23 +118,28 @@ if all(c in df_gov.columns for c in ["Region", "Year", "VALUE (0 - 4)"]):
             range_color=[data_min, data_max],
             title="OECD Regulatory Governance Score Evolution (2021 vs 2024 Loop)",
         )
-        # Configure automatic loop play settings
-        if len(fig_map.layout.updatemenus) > 0:
-            fig_map.layout.updatemenus[0].buttons[0].args[1]["frame"]["duration"] = 2500
-            fig_map.layout.updatemenus[0].buttons[0].args[1]["transition"]["duration"] = 1000
-            fig_map.layout.updatemenus[0].buttons[0].args[1]["transition"]["easing"] = "cubic-in-out"
-            fig_map.layout.updatemenus[0].buttons[0].args[1]["fromcurrent"] = True
-            fig_map.layout.updatemenus[0].buttons[0].args[1]["mode"] = "immediate"
+        
+        # Force automatic animation playback and looping behavior via layout updatemenus
+        fig_map.layout.updatemenus[0].buttons[0].args[1]["frame"]["duration"] = 2000
+        fig_map.layout.updatemenus[0].buttons[0].args[1]["transition"]["duration"] = 800
+        fig_map.layout.updatemenus[0].buttons[0].args[1]["fromcurrent"] = True
+        fig_map.layout.updatemenus[0].buttons[0].args[1]["mode"] = "immediate"
+        
+        # Add auto-play trigger on load
+        fig_map.layout.sliders[0]["pad"]["t"] = 50
 
+    # Zoomed-in projection focusing on North America, Europe, North Africa, and Asia (excluding Australia/Antarctica)
     fig_map.update_layout(
         geo=dict(
             showframe=False,
             showcoastlines=True,
-            projection_type="natural earth",
+            projection_type="mercator",
+            center=dict(lat=42, lon=20),
+            projection_scale=2.0,  # Zooms in to eliminate Australia and frame Northern Hemisphere focus
             bgcolor="rgba(0,0,0,0)",
         ),
         coloraxis_colorbar=dict(title=f"Score<br>(Mean: {data_mean:.2f})"),
-        height=600,
+        height=650,
         margin=dict(l=0, r=0, t=50, b=0),
     )
     fig_map.update_traces(marker_line_width=0.5, selector=dict(type='choropleth'))
